@@ -1,0 +1,10 @@
+config file(with gitiginore)/database (support prod/dev)
+whatsapp notify
+email template
+better logging
+cleanup
+README.md (Why, why not RSS, why don't use creation/state_tsz...)
+paging for fetch listings 
+packaging: arch/debian
+automatic tests 
+requirements.txt
