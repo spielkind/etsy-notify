@@ -2,9 +2,14 @@ config file(with gitiginore)/database (support prod/dev)
 whatsapp notify
 email template
 better logging
-cleanup
+cleanup/rewrite with objects/functions
 README.md (Why, why not RSS, why don't use creation/state_tsz...)
 paging for fetch listings 
 packaging: arch/debian
 automatic tests 
 requirements.txt
+signal handling
+exception handling
+own rest api with auth (to fetch items)
+multiple shops
+daemon
