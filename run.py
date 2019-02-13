@@ -4,17 +4,9 @@
 import os
 import time
 import logging
-from json import JSONDecodeError
-from requests_oauthlib import OAuth1Session
-from notifications import Gmail, Console
 import db
-
-ENV = os.environ
-
-ETSY = OAuth1Session(ENV['ETSY_CLIENT_KEY'],
-                     client_secret=ENV['ETSY_CLIENT_SECRET'],
-                     resource_owner_key=ENV['ETSY_RESOURCE_OWNER_KEY'],
-                     resource_owner_secret=ENV['ETSY_RESOURCE_OWNER_SECRET'])
+from etsy import Etsy
+from notifications import Gmail, Console
 
 # logging
 logging.basicConfig(filename='etsy.log',format='%(asctime)s:%(levelname)s:%(message)s', level=logging.INFO)
@@ -22,22 +14,17 @@ console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 logging.getLogger("").addHandler(console)
 
+ENV = os.environ
+
+ETSY = Etsy(client_key=os.environ['ETSY_CLIENT_KEY'],
+            client_secret=os.environ['ETSY_CLIENT_SECRET'],
+            resource_owner_key=os.environ['ETSY_RESOURCE_OWNER_KEY'],
+            resource_owner_secret=os.environ['ETSY_RESOURCE_OWNER_SECRET'])
+
 def watch(url, url_params, handler, interval):
     while True:
-        response = ETSY.get(ENV['ETSY_API_ENDPOINT'] + url, params=url_params)
-
-        if response.status_code == 200:
-            try:
-                results = response.json()['results']
-            except JSONDecodeError:
-                logging.fatal('Invalid JSON returned from URL %s: "%s"', url, response.text)
-                break
-        else:
-            logging.fatal('Unexpected status code %s from URL %s (%s)', 
-                          response.status_code, url, response.text)
-            break
-
-        logging.info('API fetched %s items from %s', len(results), url)
+        results = ETSY.get_data(url, url_params)['results']
+        logging.debug('API fetched %s items from %s', len(results), url)
 
         db.store_listings(results)
         new_items = db.get_diff_listings(results)
