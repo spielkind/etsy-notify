@@ -39,14 +39,14 @@ def notify(items):
         ts = datetime.fromtimestamp(i['last_modified_tsz']).strftime('%H:%M:%S %d.%m.%Y')
         body += 'Date: ' + ts + '\nTitle: ' +  i['title'] + '\nURL: ' + i['url'] + '\n'
     headers = {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Content-Disposition': 'inline',
-      'Content-Transfer-Encoding': '8bit',
-      'From': sent_from,
-      'To': ", ".join(sent_to),
-      'Date': datetime.now().strftime('%a, %d %b %Y  %H:%M:%S %Z'),
-      'X-Mailer': 'python',
-      'Subject': subject
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Disposition': 'inline',
+        'Content-Transfer-Encoding': '8bit',
+        'From': sent_from,
+        'To': ", ".join(sent_to),
+        'Date': datetime.now().strftime('%a, %d %b %Y  %H:%M:%S %Z'),
+        'X-Mailer': 'python',
+        'Subject': subject
     }
     msg = ''
     for key, value in headers.items():
@@ -89,15 +89,15 @@ while True:
     for result in results:
         params = (result['listing_id'], current_ts, json.dumps(result))
         db.execute("""
-          UPDATE listings
-          SET request_date = :2, result = :3
-          WHERE listing_id = :1;
+            UPDATE listings
+            SET request_date = :2, result = :3
+            WHERE listing_id = :1;
         """, params)
 
         db.execute("""
-          INSERT INTO listings (listing_id, request_date, result)
-          SELECT :1, :2, :3
-          WHERE NOT EXISTS (SELECT 1 FROM listings WHERE listing_id = :1);
+            INSERT INTO listings (listing_id, request_date, result)
+            SELECT :1, :2, :3
+            WHERE NOT EXISTS (SELECT 1 FROM listings WHERE listing_id = :1);
         """, params)
 
     conn.commit()
@@ -116,9 +116,9 @@ while True:
 
     notify(items)
     db.executemany("""
-      UPDATE listings SET notified_date = ? WHERE listing_id = ? AND notified_date IS NULL;
-    """, [(unixtime(), item['listing_id']) for item in items]
-    )
+        UPDATE listings SET notified_date = ? WHERE listing_id = ? AND notified_date IS NULL;
+    """, [(unixtime(), item['listing_id']) for item in items])
+
     conn.commit()
 
     time.sleep(60)
