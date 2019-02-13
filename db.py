@@ -44,15 +44,14 @@ def store_listing(listing):
 
     DB.commit()
 
-def store_listings(listings):
-    """stores all given new listings in the database"""
-    for listing in listings:
-        store_listing(listing)
-
 def get_diff_listings(listings):
     """remove inactive listings and return the ones that have not yet been notified"""
 
+    listings = list(listings)
     listings_ids = [item['listing_id'] for item in listings]
+
+    for listing in listings:
+        store_listing(listing)
 
     DB.execute(
         """

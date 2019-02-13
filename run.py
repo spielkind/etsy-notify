@@ -26,7 +26,6 @@ def watch(url, url_params, handler, interval):
         results = ETSY.get_data(url, url_params)['results']
         logging.debug('API fetched %s items from %s', len(results), url)
 
-        db.store_listings(results)
         new_items = db.get_diff_listings(results)
 
         if new_items:
