@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import pprint
+import os
 import time
 import smtplib
 import logging
@@ -9,15 +9,14 @@ import json
 from datetime import datetime
 from requests_oauthlib import OAuth1Session
 
-client_key = 'x'
-client_secret = 'x'
-resource_owner_key = 'x'
-resource_owner_secret = 'x'
-etsy = OAuth1Session(client_key,
-                     client_secret=client_secret,
-                     resource_owner_key=resource_owner_key,
-                     resource_owner_secret=resource_owner_secret)
-url = 'https://api.etsy.com/v2/shops/XXXXXXX/listings/active?sort_on=created&sort_order=down&limit=200'
+ENV = os.environ
+
+etsy = OAuth1Session(ENV['ETSY_CLIENT_KEY'],
+                     client_secret=ENV['ETSY_CLIENT_SECRET'],
+                     resource_owner_key=ENV['ETSY_RESOURCE_OWNER_KEY'],
+                     resource_owner_secret=ENV['ETSY_RESOURCE_OWNER_SECRET'])
+
+url = ENV['ETSY_API_ENDPOINT'] + 'shops/XXXXXXX/listings/active?sort_on=created&sort_order=down&limit=200'
 
 # logging
 logging.basicConfig(filename='/home/XXXXX/etsy/etsy.log',format='%(asctime)s:%(levelname)s:%(message)s', level=logging.INFO)
@@ -30,8 +29,8 @@ logging.getLogger("").addHandler(console)
 def notify(items):
     if not items:
         return
-    gmail_user = 'XXXXXXX@gmail.com'
-    gmail_password = 'XXXXXX'
+    gmail_user = ENV['GMAIL_USER']
+    gmail_password = ENV['GMAIL_PASSWORD']
     sent_from = 'XXX XXXXXX <XXXXXXX@gmail.com>'
     sent_to = ['XXXXXX@gmail.com','XXXXXXX@gmail.com']
     subject = 'At least one new Etsy item in XXXXX shop is available!'
