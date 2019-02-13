@@ -2,9 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import os
+import time
 import logging
 from json import JSONDecodeError
 from requests_oauthlib import OAuth1Session
+import db
 
 class Etsy:
     def __init__(self, client_key, client_secret, resource_owner_key, resource_owner_secret):
@@ -39,3 +41,21 @@ class Etsy:
         else:
             logging.fatal('No data available from request.')
             raise SystemExit(1)
+
+    def watch(self, url, url_params, handler, interval):
+        """starts polling a shop URL in a given interval""" 
+
+        while True:
+            results = self.get_data(url, url_params)['results']
+            logging.debug('API fetched %s items from %s', len(results), url)
+
+            new_items = db.get_diff_listings(results)
+
+            if new_items:
+                handler.nodify_items(new_items)
+                db.mark_as_notified(new_items)
+                logging.info("notified %s new items", len(new_items))
+            else:
+                logging.info("no new items this time")
+
+            time.sleep(interval)
