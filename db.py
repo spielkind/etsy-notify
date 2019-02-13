@@ -32,14 +32,14 @@ def store_listing(listing):
 
     DB.execute("""
         UPDATE listings
-        SET request_date = :2, result = :3
-        WHERE listing_id = :1;
+        SET request_date = ?2, result = ?3
+        WHERE listing_id = ?1;
     """, params)
 
     DB.execute("""
         INSERT INTO listings (listing_id, request_date, result)
-        SELECT :1, :2, :3
-        WHERE NOT EXISTS (SELECT 1 FROM listings WHERE listing_id = :1);
+        SELECT ?1, ?2, ?3
+        WHERE NOT EXISTS (SELECT 1 FROM listings WHERE listing_id = ?1);
     """, params)
 
     DB.commit()
