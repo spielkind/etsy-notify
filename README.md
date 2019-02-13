@@ -19,7 +19,7 @@ or, on the Windows command line (if necessary, as Admin):
 
 As soon as `pipenv` is available, all other dependencies can be installed with:
 
-    pipenv update
+    pipenv install
 
 ## Configuration
 Place a text file named `.env` in in the project directory and put your [Etsy API keys](https://help.etsy.com/hc/en-us/articles/360000336247-Etsy-s-API) and [Google App passwords](https://support.google.com/accounts/answer/185833?hl=en) into that file.
@@ -40,7 +40,7 @@ GMAIL_PASSWORD='...'
 
 ## Running
 
-To run the tool, either load the Python environment first (for debugging/testing)
+To run the tool, either load the Python virtual environment first (for debugging/testing)
 
     pipenv shell
     python ./run.py
