@@ -34,7 +34,7 @@ def watch(url, url_params, handler, interval):
                 break
         else:
             logging.fatal('Unexpected status code %s from URL %s (%s)', 
-                          url, response.status_code, response.text)
+                          response.status_code, url, response.text)
             break
 
         logging.info('API fetched %s items from %s', len(results), url)
