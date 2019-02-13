@@ -32,7 +32,7 @@ class Gmail:
             server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
             server.ehlo()
             server.login(self.user, self.password)
-            server.sendmail(headers['From'], headers['To'], msg.encode('utf8'))
+            server.sendmail(headers['From'], self.sent_to, msg.encode('utf8'))
             logging.info(msg)
             server.close()
 
