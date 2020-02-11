@@ -1,0 +1,8 @@
+stages:
+- name: test
+  steps:
+  - runScriptConfig:
+      image: python:latest
+      shellScript: ls -l
+timeout: 60
+notification: {}
