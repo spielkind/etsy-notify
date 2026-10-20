@@ -84,6 +84,48 @@ Without Compose:
     docker run -d --name etsy-notify --restart unless-stopped \
       --env-file .env -v "$PWD/data:/data" etsy-notify
 
+## Running as a systemd service
+Alternative to Docker, e.g. on Raspberry Pi OS. The service runs as its own system user from `/opt/etsy-notify`, logs to the journal and is sandboxed (see [`contrib/systemd/etsy-notify.service`](contrib/systemd/etsy-notify.service)).
+
+1. Create the user and check out the code:
+
+       sudo useradd --system --home-dir /var/lib/etsy-notify --shell /usr/sbin/nologin etsy-notify
+       sudo git clone https://github.com/spielkind/etsy-notify.git /opt/etsy-notify
+       cd /opt/etsy-notify
+
+2. Install the dependencies. `UV_PYTHON_INSTALL_DIR` makes uv put a downloaded Python under `/opt` instead of your home directory, which the sandboxed service could not read:
+
+       sudo env "PATH=$PATH" UV_PYTHON_INSTALL_DIR=/opt/etsy-notify/.python uv sync --locked --no-dev
+
+3. Create the configuration (only root can write it, the service can read it):
+
+       sudo cp .env.example .env
+       sudo nano .env
+       sudo chown root:etsy-notify .env
+       sudo chmod 640 .env
+
+   `DB_PATH` and `LOG_FILE` are set by the unit (`/var/lib/etsy-notify/etsy.db`, journal only).
+
+4. Install and start the service:
+
+       sudo cp contrib/systemd/etsy-notify.service /etc/systemd/system/
+       sudo systemctl daemon-reload
+       sudo systemctl enable --now etsy-notify
+
+Useful commands:
+
+    systemctl status etsy-notify
+    journalctl -u etsy-notify -f
+    cd /opt/etsy-notify && sudo -u etsy-notify env DB_PATH=/var/lib/etsy-notify/etsy.db \
+      .venv/bin/etsy-notify healthcheck
+
+Update:
+
+    cd /opt/etsy-notify
+    sudo git pull
+    sudo env "PATH=$PATH" UV_PYTHON_INSTALL_DIR=/opt/etsy-notify/.python uv sync --locked --no-dev
+    sudo systemctl restart etsy-notify
+
 ## Development
 
 Install the git hooks once; they run ruff, mypy, actionlint and some basic file checks on every commit:
