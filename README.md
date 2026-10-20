@@ -5,13 +5,13 @@
 | Name                              |    Stmts |     Miss |   Branch |   BrPart |    Cover |   Missing |
 |---------------------------------- | -------: | -------: | -------: | -------: | -------: | --------: |
 | src/shop\_notify/\_\_init\_\_.py  |        0 |        0 |        0 |        0 |     100% |           |
-| src/shop\_notify/\_\_main\_\_.py  |       89 |        0 |       16 |        0 |     100% |           |
-| src/shop\_notify/config.py        |       44 |        0 |        4 |        0 |     100% |           |
+| src/shop\_notify/\_\_main\_\_.py  |      101 |        0 |       14 |        0 |     100% |           |
+| src/shop\_notify/config.py        |       36 |        0 |        2 |        0 |     100% |           |
 | src/shop\_notify/db.py            |       24 |        0 |        0 |        0 |     100% |           |
-| src/shop\_notify/etsy.py          |       70 |        0 |       10 |        0 |     100% |           |
-| src/shop\_notify/models.py        |        6 |        0 |        0 |        0 |     100% |           |
-| src/shop\_notify/notifications.py |       43 |        0 |        6 |        0 |     100% |           |
-| **TOTAL**                         |  **276** |    **0** |   **36** |    **0** | **100%** |           |
+| src/shop\_notify/etsy.py          |       89 |        0 |       16 |        0 |     100% |           |
+| src/shop\_notify/models.py        |       15 |        0 |        0 |        0 |     100% |           |
+| src/shop\_notify/notifications.py |       83 |        0 |       26 |        0 |     100% |           |
+| **TOTAL**                         |  **348** |    **0** |   **58** |    **0** | **100%** |           |
 
 
 ## Setup coverage badge
