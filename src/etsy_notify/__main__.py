@@ -2,6 +2,7 @@ import logging
 import signal
 import threading
 from types import FrameType
+from typing import assert_never
 
 from etsy_notify.config import NotifierType, Settings
 from etsy_notify.db import ListingStore
@@ -36,6 +37,8 @@ def build_notifier(settings: Settings) -> Notifier:
                 sent_from=settings.mail_from or settings.gmail_user,
                 sent_to=settings.mail_to,
             )
+        case _:
+            assert_never(settings.notifier)
 
 
 def resolve_shop_id(client: EtsyClient, settings: Settings) -> int:

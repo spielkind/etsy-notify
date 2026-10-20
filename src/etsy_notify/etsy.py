@@ -67,25 +67,26 @@ class EtsyClient:
 
     def _get(self, path: str, params: dict[str, str | int]) -> httpx.Response:
         log.debug("Etsy API: GET %s %s", path, params)
-        for attempt in range(self._retries + 1):
+        attempt = 0
+        while True:
             try:
                 response = self._client.get(path, params=params)
             except httpx.HTTPError as e:
                 raise EtsyError(f"Request to {path} failed: {e}") from e
 
-            if response.status_code == httpx.codes.TOO_MANY_REQUESTS and attempt < self._retries:
-                delay = _retry_after(response, default=2.0**attempt)
-                log.warning("Rate limited by Etsy, retrying in %.0f s", delay)
-                time.sleep(delay)
-                continue
+            if response.status_code != httpx.codes.TOO_MANY_REQUESTS or attempt >= self._retries:
+                break
+            delay = _retry_after(response, default=2.0**attempt)
+            log.warning("Rate limited by Etsy, retrying in %.0f s", delay)
+            time.sleep(delay)
+            attempt += 1
 
-            if response.is_error:
-                raise EtsyError(
-                    f"Unexpected status {response.status_code} from {response.request.url}: "
-                    f"{response.text}"
-                )
-            return response
-        raise AssertionError("unreachable")
+        if response.is_error:
+            raise EtsyError(
+                f"Unexpected status {response.status_code} from {response.request.url}: "
+                f"{response.text}"
+            )
+        return response
 
     def find_shop_id(self, shop_name: str) -> int:
         """Resolve a shop name (as in etsy.com/shop/<name>) to its numeric shop ID."""
