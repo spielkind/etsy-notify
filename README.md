@@ -2,16 +2,16 @@
 
 [Full report](https://htmlpreview.github.io/?https://github.com/spielkind/etsy-notify/blob/python-coverage-comment-action-data/htmlcov/index.html)
 
-| Name                              |    Stmts |     Miss |   Branch |   BrPart |   Cover |   Missing |
-|---------------------------------- | -------: | -------: | -------: | -------: | ------: | --------: |
-| src/etsy\_notify/\_\_init\_\_.py  |        0 |        0 |        0 |        0 |    100% |           |
-| src/etsy\_notify/\_\_main\_\_.py  |       65 |        0 |       14 |        1 |     99% | 30-\>exit |
-| src/etsy\_notify/config.py        |       37 |        0 |        4 |        0 |    100% |           |
-| src/etsy\_notify/db.py            |       24 |        0 |        0 |        0 |    100% |           |
-| src/etsy\_notify/etsy.py          |       69 |        1 |       12 |        1 |     98% |        88 |
-| src/etsy\_notify/models.py        |        6 |        0 |        0 |        0 |    100% |           |
-| src/etsy\_notify/notifications.py |       43 |        0 |        6 |        0 |    100% |           |
-| **TOTAL**                         |  **244** |    **1** |   **36** |    **2** | **99%** |           |
+| Name                              |    Stmts |     Miss |   Branch |   BrPart |    Cover |   Missing |
+|---------------------------------- | -------: | -------: | -------: | -------: | -------: | --------: |
+| src/etsy\_notify/\_\_init\_\_.py  |        0 |        0 |        0 |        0 |     100% |           |
+| src/etsy\_notify/\_\_main\_\_.py  |       66 |        0 |       12 |        0 |     100% |           |
+| src/etsy\_notify/config.py        |       37 |        0 |        4 |        0 |     100% |           |
+| src/etsy\_notify/db.py            |       24 |        0 |        0 |        0 |     100% |           |
+| src/etsy\_notify/etsy.py          |       70 |        0 |       10 |        0 |     100% |           |
+| src/etsy\_notify/models.py        |        6 |        0 |        0 |        0 |     100% |           |
+| src/etsy\_notify/notifications.py |       43 |        0 |        6 |        0 |     100% |           |
+| **TOTAL**                         |  **246** |    **0** |   **32** |    **0** | **100%** |           |
 
 
 ## Setup coverage badge
