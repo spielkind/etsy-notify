@@ -1,6 +1,9 @@
+import argparse
 import logging
 import signal
 import threading
+import time
+from collections.abc import Sequence
 from types import FrameType
 from typing import assert_never
 
@@ -67,8 +70,22 @@ def run_once(client: EtsyClient, store: ListingStore, notifier: Notifier, shop_i
     return len(new_items)
 
 
-def main() -> None:
-    settings = Settings()
+def healthcheck(settings: Settings, now: float | None = None) -> int:
+    """Return 0 if the last successful poll is recent enough, 1 otherwise."""
+    path = settings.heartbeat_path
+    try:
+        age = (time.time() if now is None else now) - path.stat().st_mtime
+    except FileNotFoundError:
+        print(f"unhealthy: no heartbeat yet ({path})")
+        return 1
+    if age > settings.heartbeat_max_age:
+        print(f"unhealthy: last successful poll {age / 60:.0f} min ago")
+        return 1
+    print(f"healthy: last successful poll {age:.0f} s ago")
+    return 0
+
+
+def run(settings: Settings) -> None:
     setup_logging(settings)
     notifier = build_notifier(settings)
 
@@ -92,6 +109,7 @@ def main() -> None:
             while not stop.is_set():
                 try:
                     run_once(client, store, notifier, shop_id)
+                    settings.heartbeat_path.touch()
                 except EtsyError as e:
                     log.error("%s", e)
                 except Exception:
@@ -99,6 +117,25 @@ def main() -> None:
                 stop.wait(settings.poll_interval)
         finally:
             store.close()
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        prog="etsy-notify", description="Watch a shop for new listings and send notifications."
+    )
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=["run", "healthcheck"],
+        default="run",
+        help="run: poll the shop (default); healthcheck: exit 0 if the last poll was recent",
+    )
+    args = parser.parse_args(argv)
+
+    settings = Settings()
+    if args.command == "healthcheck":
+        raise SystemExit(healthcheck(settings))
+    run(settings)
 
 
 if __name__ == "__main__":

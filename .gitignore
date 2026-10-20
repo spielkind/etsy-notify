@@ -3,6 +3,7 @@
 
 # project-internal files
 etsy.db
+*.heartbeat
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -48,7 +48,7 @@ Copy `.env.example` to `.env` and fill in your values:
 - `NOTIFIER`: `console` (default, for testing) or `gmail`.
 - For `gmail`: `GMAIL_USER`, `GMAIL_PASSWORD` (a [Google App Password](https://support.google.com/accounts/answer/185833), requires 2FA), `MAIL_FROM` and `MAIL_TO` (comma-separated list).
 
-Optional: `POLL_INTERVAL` (seconds, default 60; for a small shop 5–15 minutes is usually plenty), `DB_PATH`, `LOG_FILE` (empty to log to stdout only), `LOG_LEVEL`.
+Optional: `POLL_INTERVAL` (seconds, default 60; for a small shop 5–15 minutes is usually plenty), `DB_PATH`, `LOG_FILE` (empty to log to stdout only), `LOG_LEVEL`, `HEARTBEAT_FILE` (default: next to the database).
 
 Only listing ID, title, URL and modification time are stored locally; entries of listings that have vanished are removed after they were notified. If Etsy responds with `429 Too Many Requests`, the tool waits as long as the `retry-after` header asks before retrying.
 
@@ -59,6 +59,13 @@ All settings can also be passed as environment variables.
     uv run etsy-notify
 
 Stop it with `Ctrl+C` or `SIGTERM`.
+
+### Health check
+After every successful poll the tool touches a heartbeat file. To check whether it is still working:
+
+    uv run etsy-notify healthcheck
+
+It exits with `0` if the last successful poll is younger than `2 × POLL_INTERVAL + 60 s`, otherwise with `1` (e.g. when Etsy rejects the API key or the network is down). It reads the same configuration as the main command.
 
 ## Development
 

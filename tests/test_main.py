@@ -166,10 +166,11 @@ def test_main_polls_until_signal(
         return False
 
     with patch("threading.Event.wait", fake_wait):
-        cli.main()
+        cli.main([])
 
     assert listings.call_count == 2
     assert 'NOTIFY: listing ID 1 "Item 1"' in capsys.readouterr().out
+    assert (tmp_path / "test.heartbeat").exists()
 
 
 def test_main_logs_unexpected_errors(
@@ -197,6 +198,49 @@ def test_main_logs_unexpected_errors(
         patch.object(cli, "run_once", boom),
         patch("threading.Event.wait", return_value=False),
     ):
-        cli.main()
+        cli.main([])
 
     assert "Unexpected error during poll" in log_file.read_text()
+
+
+def test_heartbeat_defaults_next_to_db(tmp_path: Path) -> None:
+    settings = _settings(db_path=tmp_path / "shop.db")
+    assert settings.heartbeat_path == tmp_path / "shop.heartbeat"
+    assert _settings(heartbeat_file=tmp_path / "hb").heartbeat_path == tmp_path / "hb"
+
+
+def test_healthcheck_without_heartbeat(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.healthcheck(_settings(heartbeat_file=tmp_path / "hb")) == 1
+    assert "no heartbeat yet" in capsys.readouterr().out
+
+
+def test_healthcheck_fresh_and_stale(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    heartbeat = tmp_path / "hb"
+    heartbeat.touch()
+    mtime = heartbeat.stat().st_mtime
+    settings = _settings(heartbeat_file=heartbeat, poll_interval=60)
+
+    assert cli.healthcheck(settings, now=mtime + 10) == 0
+    assert "healthy" in capsys.readouterr().out
+    assert cli.healthcheck(settings, now=mtime + 181) == 1
+    assert "3 min ago" in capsys.readouterr().out
+
+
+def test_main_healthcheck_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+    for key, value in {
+        "ETSY_API_KEY": "key",
+        "ETSY_SHARED_SECRET": "secret",
+        "ETSY_SHOP_ID": "42",
+        "HEARTBEAT_FILE": str(tmp_path / "hb"),
+    }.items():
+        monkeypatch.setenv(key, value)
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["healthcheck"])
+    assert exc.value.code == 1
+
+    (tmp_path / "hb").touch()
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["healthcheck"])
+    assert exc.value.code == 0

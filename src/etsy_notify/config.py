@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     poll_interval: int = Field(default=60, ge=10)
     db_path: Path = Path("etsy.db")
+    heartbeat_file: Path | None = None
     log_file: Path | None = Path("etsy.log")
     log_level: str = "INFO"
 
@@ -48,3 +49,13 @@ class Settings(BaseSettings):
         if self.etsy_shop_id is None and not self.etsy_shop_name:
             raise ValueError("either ETSY_SHOP_ID or ETSY_SHOP_NAME must be set")
         return self
+
+    @property
+    def heartbeat_path(self) -> Path:
+        """Heartbeat file, by default next to the database."""
+        return self.heartbeat_file or self.db_path.with_suffix(".heartbeat")
+
+    @property
+    def heartbeat_max_age(self) -> float:
+        """Seconds after which a missing heartbeat update counts as unhealthy."""
+        return 2 * self.poll_interval + 60
