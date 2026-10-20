@@ -100,6 +100,8 @@ def run_once(client: EtsyClient, store: ListingStore, notifier: Notifier, shop_i
     if new_items:
         notifier.notify(add_images(client, new_items))
         store.mark_as_notified(new_items)
+        for item in new_items:
+            log.info("New item: %s (%s)", item.title, item.url)
         log.info("Notified %d new item(s)", len(new_items))
     else:
         log.info("No new items this time")

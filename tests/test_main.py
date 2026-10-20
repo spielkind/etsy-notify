@@ -13,7 +13,7 @@ from shop_notify.config import Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError, Quota
 from shop_notify.models import Listing
-from shop_notify.notifications import AppriseNotifier, ConsoleNotifier
+from shop_notify.notifications import AppriseNotifier, ConsoleNotifier, NotificationError
 from shop_notify.systemd import SystemdNotifier
 from tests.helpers import make_listing
 
@@ -120,7 +120,8 @@ def test_resolve_shop_id_not_found_exits() -> None:
         cli.resolve_shop_id(client, _settings(etsy_shop_id=None, etsy_shop_name="someshop"))
 
 
-def test_run_once_notifies_only_new_items() -> None:
+def test_run_once_notifies_only_new_items(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
     client = _client()
     client.active_listings.return_value = [make_listing(1), make_listing(2)]
     client.listing_images.return_value = {2: "https://img/2.jpg"}
@@ -132,6 +133,27 @@ def test_run_once_notifies_only_new_items() -> None:
     assert notifier.calls == [[1, 2]]
     assert notifier.images == [[None, "https://img/2.jpg"]]
     client.listing_images.assert_called_once_with([1, 2])
+    assert "New item: Item 1 (https://www.etsy.com/listing/1)" in caplog.text
+    assert "New item: Item 2 (https://www.etsy.com/listing/2)" in caplog.text
+    store.close()
+
+
+def test_run_once_does_not_log_items_if_notification_fails(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
+    client = _client()
+    client.active_listings.return_value = [make_listing(1)]
+    client.listing_images.return_value = {}
+    store = ListingStore(":memory:")
+    notifier = MagicMock()
+    notifier.notify.side_effect = NotificationError("all targets failed")
+
+    with pytest.raises(NotificationError):
+        cli.run_once(client, store, notifier, 42)
+
+    assert "New item:" not in caplog.text
+    assert [i.listing_id for i in store.sync([make_listing(1)])] == [1]
     store.close()
 
 
