@@ -5,13 +5,13 @@
 | Name                              |    Stmts |     Miss |   Branch |   BrPart |    Cover |   Missing |
 |---------------------------------- | -------: | -------: | -------: | -------: | -------: | --------: |
 | src/etsy\_notify/\_\_init\_\_.py  |        0 |        0 |        0 |        0 |     100% |           |
-| src/etsy\_notify/\_\_main\_\_.py  |       66 |        0 |       12 |        0 |     100% |           |
-| src/etsy\_notify/config.py        |       37 |        0 |        4 |        0 |     100% |           |
+| src/etsy\_notify/\_\_main\_\_.py  |       89 |        0 |       16 |        0 |     100% |           |
+| src/etsy\_notify/config.py        |       44 |        0 |        4 |        0 |     100% |           |
 | src/etsy\_notify/db.py            |       24 |        0 |        0 |        0 |     100% |           |
 | src/etsy\_notify/etsy.py          |       70 |        0 |       10 |        0 |     100% |           |
 | src/etsy\_notify/models.py        |        6 |        0 |        0 |        0 |     100% |           |
 | src/etsy\_notify/notifications.py |       43 |        0 |        6 |        0 |     100% |           |
-| **TOTAL**                         |  **246** |    **0** |   **32** |    **0** | **100%** |           |
+| **TOTAL**                         |  **276** |    **0** |   **36** |    **0** | **100%** |           |
 
 
 ## Setup coverage badge
