@@ -1,20 +1,20 @@
 [Unit]
-Description=Shop listing notifier (etsy-notify)
-Documentation=https://github.com/spielkind/etsy-notify
+Description=Shop listing notifier (shop-notify)
+Documentation=https://github.com/spielkind/shop-notify
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=simple
-User=etsy-notify
-Group=etsy-notify
-WorkingDirectory=/opt/etsy-notify
-ExecStart=/opt/etsy-notify/.venv/bin/etsy-notify
-# Environment variables take precedence over /opt/etsy-notify/.env
-Environment=DB_PATH=/var/lib/etsy-notify/etsy.db
+User=shop-notify
+Group=shop-notify
+WorkingDirectory=/opt/shop-notify
+ExecStart=/opt/shop-notify/.venv/bin/shop-notify
+# Environment variables take precedence over /opt/shop-notify/.env
+Environment=DB_PATH=/var/lib/shop-notify/shop-notify.db
 Environment=LOG_FILE=
 Environment=PYTHONUNBUFFERED=1
-StateDirectory=etsy-notify
+StateDirectory=shop-notify
 StateDirectoryMode=0700
 UMask=0077
 Restart=on-failure

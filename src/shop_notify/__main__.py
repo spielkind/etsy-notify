@@ -7,12 +7,12 @@ from collections.abc import Sequence
 from types import FrameType
 from typing import assert_never
 
-from etsy_notify.config import NotifierType, Settings
-from etsy_notify.db import ListingStore
-from etsy_notify.etsy import EtsyClient, EtsyError
-from etsy_notify.notifications import ConsoleNotifier, GmailNotifier, Notifier
+from shop_notify.config import NotifierType, Settings
+from shop_notify.db import ListingStore
+from shop_notify.etsy import EtsyClient, EtsyError
+from shop_notify.notifications import ConsoleNotifier, GmailNotifier, Notifier
 
-log = logging.getLogger("etsy_notify")
+log = logging.getLogger("shop_notify")
 
 
 def setup_logging(settings: Settings) -> None:
@@ -121,7 +121,7 @@ def run(settings: Settings) -> None:
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        prog="etsy-notify", description="Watch a shop for new listings and send notifications."
+        prog="shop-notify", description="Watch a shop for new listings and send notifications."
     )
     parser.add_argument(
         "command",

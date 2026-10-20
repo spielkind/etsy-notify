@@ -1,4 +1,4 @@
-from etsy_notify.models import Listing
+from shop_notify.models import Listing
 
 
 def make_listing(listing_id: int, title: str = "Item") -> Listing:

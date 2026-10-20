@@ -3,12 +3,12 @@
   <img alt="Shop Notify – get notified when new items appear in a shop" src="docs/banner-light.svg">
 </picture>
 
-# etsy-notify
+# Shop Notify
 
-[![CI](https://github.com/spielkind/etsy-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/spielkind/etsy-notify/actions/workflows/ci.yml)
-[![Coverage](https://raw.githubusercontent.com/spielkind/etsy-notify/python-coverage-comment-action-data/badge.svg)](https://github.com/spielkind/etsy-notify/tree/python-coverage-comment-action-data)
+[![CI](https://github.com/spielkind/shop-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/spielkind/shop-notify/actions/workflows/ci.yml)
+[![Coverage](https://raw.githubusercontent.com/spielkind/shop-notify/python-coverage-comment-action-data/badge.svg)](https://github.com/spielkind/shop-notify/tree/python-coverage-comment-action-data)
 
-This is a tool that is meant to watch Etsy shop listings for significant changes and notify interested parties.
+Shop Notify watches the listings of an Etsy shop and notifies interested parties about new items.
 
 It does that by polling the [Etsy Open API v3](https://developers.etsy.com/documentation/), analyzing the response and identifying any items that are new in the shop, either brand-new ones or any that have re-appeared. A notification is sent for all new items.
 
@@ -56,14 +56,14 @@ All settings can also be passed as environment variables.
 
 ## Running
 
-    uv run etsy-notify
+    uv run shop-notify
 
 Stop it with `Ctrl+C` or `SIGTERM`.
 
 ### Health check
 After every successful poll the tool touches a heartbeat file. To check whether it is still working:
 
-    uv run etsy-notify healthcheck
+    uv run shop-notify healthcheck
 
 It exits with `0` if the last successful poll is younger than `2 × POLL_INTERVAL + 60 s`, otherwise with `1` (e.g. when Etsy rejects the API key or the network is down). It reads the same configuration as the main command.
 
@@ -75,56 +75,56 @@ The image works on `linux/amd64` and `linux/arm64` (Raspberry Pi with a 64-bit O
 
 - The database and heartbeat file live in `./data` (mounted to `/data`). The container runs as UID 1000, so `data/` must be writable for that user – on a Raspberry Pi the default user `pi` already has UID 1000.
 - Logs go to stdout: `docker compose logs -f`
-- `docker compose ps` shows the health status (`healthy`/`unhealthy`) from `etsy-notify healthcheck`. Docker does not restart unhealthy containers by itself; a crashed process is restarted thanks to `restart: unless-stopped`.
+- `docker compose ps` shows the health status (`healthy`/`unhealthy`) from `shop-notify healthcheck`. Docker does not restart unhealthy containers by itself; a crashed process is restarted thanks to `restart: unless-stopped`.
 - Update: `git pull && docker compose up -d --build`
 
 Without Compose:
 
-    docker build -t etsy-notify .
-    docker run -d --name etsy-notify --restart unless-stopped \
-      --env-file .env -v "$PWD/data:/data" etsy-notify
+    docker build -t shop-notify .
+    docker run -d --name shop-notify --restart unless-stopped \
+      --env-file .env -v "$PWD/data:/data" shop-notify
 
 ## Running as a systemd service
-Alternative to Docker, e.g. on Raspberry Pi OS. The service runs as its own system user from `/opt/etsy-notify`, logs to the journal and is sandboxed (see [`contrib/systemd/etsy-notify.service`](contrib/systemd/etsy-notify.service)).
+Alternative to Docker, e.g. on Raspberry Pi OS. The service runs as its own system user from `/opt/shop-notify`, logs to the journal and is sandboxed (see [`contrib/systemd/shop-notify.service`](contrib/systemd/shop-notify.service)).
 
 1. Create the user and check out the code:
 
-       sudo useradd --system --home-dir /var/lib/etsy-notify --shell /usr/sbin/nologin etsy-notify
-       sudo git clone https://github.com/spielkind/etsy-notify.git /opt/etsy-notify
-       cd /opt/etsy-notify
+       sudo useradd --system --home-dir /var/lib/shop-notify --shell /usr/sbin/nologin shop-notify
+       sudo git clone https://github.com/spielkind/shop-notify.git /opt/shop-notify
+       cd /opt/shop-notify
 
 2. Install the dependencies. `UV_PYTHON_INSTALL_DIR` makes uv put a downloaded Python under `/opt` instead of your home directory, which the sandboxed service could not read:
 
-       sudo env "PATH=$PATH" UV_PYTHON_INSTALL_DIR=/opt/etsy-notify/.python uv sync --locked --no-dev
+       sudo env "PATH=$PATH" UV_PYTHON_INSTALL_DIR=/opt/shop-notify/.python uv sync --locked --no-dev
 
 3. Create the configuration (only root can write it, the service can read it):
 
        sudo cp .env.example .env
        sudo nano .env
-       sudo chown root:etsy-notify .env
+       sudo chown root:shop-notify .env
        sudo chmod 640 .env
 
-   `DB_PATH` and `LOG_FILE` are set by the unit (`/var/lib/etsy-notify/etsy.db`, journal only).
+   `DB_PATH` and `LOG_FILE` are set by the unit (`/var/lib/shop-notify/shop-notify.db`, journal only).
 
 4. Install and start the service:
 
-       sudo cp contrib/systemd/etsy-notify.service /etc/systemd/system/
+       sudo cp contrib/systemd/shop-notify.service /etc/systemd/system/
        sudo systemctl daemon-reload
-       sudo systemctl enable --now etsy-notify
+       sudo systemctl enable --now shop-notify
 
 Useful commands:
 
-    systemctl status etsy-notify
-    journalctl -u etsy-notify -f
-    cd /opt/etsy-notify && sudo -u etsy-notify env DB_PATH=/var/lib/etsy-notify/etsy.db \
-      .venv/bin/etsy-notify healthcheck
+    systemctl status shop-notify
+    journalctl -u shop-notify -f
+    cd /opt/shop-notify && sudo -u shop-notify env DB_PATH=/var/lib/shop-notify/shop-notify.db \
+      .venv/bin/shop-notify healthcheck
 
 Update:
 
-    cd /opt/etsy-notify
+    cd /opt/shop-notify
     sudo git pull
-    sudo env "PATH=$PATH" UV_PYTHON_INSTALL_DIR=/opt/etsy-notify/.python uv sync --locked --no-dev
-    sudo systemctl restart etsy-notify
+    sudo env "PATH=$PATH" UV_PYTHON_INSTALL_DIR=/opt/shop-notify/.python uv sync --locked --no-dev
+    sudo systemctl restart shop-notify
 
 ## Development
 

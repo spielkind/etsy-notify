@@ -8,12 +8,12 @@ import httpx
 import pytest
 import respx
 
-from etsy_notify import __main__ as cli
-from etsy_notify.config import NotifierType, Settings
-from etsy_notify.db import ListingStore
-from etsy_notify.etsy import EtsyClient, EtsyError
-from etsy_notify.models import Listing
-from etsy_notify.notifications import ConsoleNotifier, GmailNotifier
+from shop_notify import __main__ as cli
+from shop_notify.config import NotifierType, Settings
+from shop_notify.db import ListingStore
+from shop_notify.etsy import EtsyClient, EtsyError
+from shop_notify.models import Listing
+from shop_notify.notifications import ConsoleNotifier, GmailNotifier
 from tests.helpers import make_listing
 
 BASE = "https://openapi.etsy.com/v3/application/"
@@ -118,9 +118,9 @@ def test_run_once_notifies_only_new_items() -> None:
 
 
 def test_setup_logging_writes_file(tmp_path: Path, restore_logging: None) -> None:
-    log_file = tmp_path / "etsy.log"
+    log_file = tmp_path / "shop-notify.log"
     cli.setup_logging(_settings(log_file=log_file, log_level="debug"))
-    logging.getLogger("etsy_notify").debug("hello")
+    logging.getLogger("shop_notify").debug("hello")
 
     assert "hello" in log_file.read_text()
 
@@ -180,7 +180,7 @@ def test_main_logs_unexpected_errors(
     restore_logging: None,
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    log_file = tmp_path / "etsy.log"
+    log_file = tmp_path / "shop-notify.log"
     for key, value in {
         "ETSY_API_KEY": "key",
         "ETSY_SHARED_SECRET": "secret",

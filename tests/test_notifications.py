@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from etsy_notify.notifications import ConsoleNotifier, GmailNotifier
+from shop_notify.notifications import ConsoleNotifier, GmailNotifier
 from tests.helpers import make_listing
 
 
@@ -26,7 +26,7 @@ def test_build_message() -> None:
 
 
 def test_notify_sends_via_smtp() -> None:
-    with patch("etsy_notify.notifications.smtplib.SMTP_SSL") as smtp_cls:
+    with patch("shop_notify.notifications.smtplib.SMTP_SSL") as smtp_cls:
         server = MagicMock()
         smtp_cls.return_value.__enter__.return_value = server
         _notifier().notify([make_listing(1)])
@@ -36,7 +36,7 @@ def test_notify_sends_via_smtp() -> None:
 
 
 def test_notify_without_items_does_nothing() -> None:
-    with patch("etsy_notify.notifications.smtplib.SMTP_SSL") as smtp_cls:
+    with patch("shop_notify.notifications.smtplib.SMTP_SSL") as smtp_cls:
         _notifier().notify([])
     smtp_cls.assert_not_called()
 

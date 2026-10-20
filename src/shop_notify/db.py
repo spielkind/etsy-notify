@@ -3,7 +3,7 @@ import time
 from collections.abc import Iterable
 from pathlib import Path
 
-from etsy_notify.models import Listing
+from shop_notify.models import Listing
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS listings (

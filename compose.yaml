@@ -1,7 +1,7 @@
 services:
-  etsy-notify:
+  shop-notify:
     build: .
-    image: etsy-notify:local
+    image: shop-notify:local
     env_file: .env
     volumes:
       - ./data:/data

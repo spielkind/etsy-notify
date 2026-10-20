@@ -5,7 +5,7 @@ from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 from typing import Protocol
 
-from etsy_notify.models import Listing
+from shop_notify.models import Listing
 
 log = logging.getLogger(__name__)
 

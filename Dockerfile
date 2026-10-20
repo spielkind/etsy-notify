@@ -30,7 +30,7 @@ COPY --from=builder /app/.venv /app/.venv
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    DB_PATH=/data/etsy.db \
+    DB_PATH=/data/shop-notify.db \
     LOG_FILE=""
 
 USER app
@@ -38,6 +38,6 @@ WORKDIR /data
 VOLUME /data
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
-    CMD ["etsy-notify", "healthcheck"]
+    CMD ["shop-notify", "healthcheck"]
 
-ENTRYPOINT ["etsy-notify"]
+ENTRYPOINT ["shop-notify"]

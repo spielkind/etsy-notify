@@ -2,7 +2,7 @@
 .vscode/
 
 # project-internal files
-etsy.db
+shop-notify.db
 *.heartbeat
 data/
 .python/

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from etsy_notify.config import NotifierType, Settings
+from shop_notify.config import NotifierType, Settings
 
 
 @pytest.fixture(autouse=True)

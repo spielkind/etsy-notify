@@ -4,7 +4,7 @@ import httpx
 import pytest
 import respx
 
-from etsy_notify.etsy import EtsyClient, EtsyError
+from shop_notify.etsy import EtsyClient, EtsyError
 
 BASE = "https://openapi.etsy.com/v3/application/"
 
@@ -74,7 +74,7 @@ def test_rate_limit_is_retried_after_delay() -> None:
         ]
     )
     with (
-        patch("etsy_notify.etsy.time.sleep") as sleep,
+        patch("shop_notify.etsy.time.sleep") as sleep,
         EtsyClient("key", "secret", base_url=BASE) as client,
     ):
         assert len(list(client.active_listings(42))) == 1
@@ -107,7 +107,7 @@ def test_rate_limit_without_valid_retry_after_uses_backoff() -> None:
         ]
     )
     with (
-        patch("etsy_notify.etsy.time.sleep") as sleep,
+        patch("shop_notify.etsy.time.sleep") as sleep,
         EtsyClient("key", "secret", base_url=BASE) as client,
     ):
         assert list(client.active_listings(42)) == []
@@ -120,7 +120,7 @@ def test_rate_limit_without_valid_retry_after_uses_backoff() -> None:
 def test_rate_limit_gives_up_after_retries() -> None:
     respx.get(f"{BASE}shops/42/listings/active").mock(return_value=httpx.Response(429))
     with (
-        patch("etsy_notify.etsy.time.sleep"),
+        patch("shop_notify.etsy.time.sleep"),
         EtsyClient("key", "secret", base_url=BASE, retries=1) as client,
         pytest.raises(EtsyError, match="429"),
     ):

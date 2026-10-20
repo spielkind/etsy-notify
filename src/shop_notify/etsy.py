@@ -7,7 +7,7 @@ from typing import Self
 import httpx
 from pydantic import BaseModel
 
-from etsy_notify.models import Listing
+from shop_notify.models import Listing
 
 log = logging.getLogger(__name__)
 
