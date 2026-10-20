@@ -53,6 +53,8 @@ def build_notifier(settings: Settings) -> Notifier:
     console = settings.notify_console
     if console is True or (console == "auto" and not notifiers):
         notifiers.insert(0, ConsoleNotifier(renderer))
+    elif console == "auto" and not settings.notify_existing_on_first_run:
+        notifiers.insert(0, ConsoleNotifier(renderer, first_run_only=True))
 
     notifier = notifiers[0] if len(notifiers) == 1 else MultiNotifier(notifiers)
     log.info("Notification targets: %s", ", ".join(notifier.targets) or "none (log only)")
@@ -99,12 +101,33 @@ def check_quota(client: EtsyClient) -> None:
         log.debug("Etsy API requests left today: %d of %d", quota.remaining, quota.limit)
 
 
-def run_once(client: EtsyClient, store: ListingStore, notifier: Notifier, shop_id: int) -> int:
+def run_once(
+    client: EtsyClient,
+    store: ListingStore,
+    notifier: Notifier,
+    shop_id: int,
+    *,
+    notify_existing: bool = False,
+) -> int:
+    """Poll once and notify new items; returns the number of notified items.
+
+    On the first run (empty database) the existing items are only recorded unless
+    ``notify_existing`` is set; notifiers still receive them flagged as ``initial``.
+    """
     listings = list(client.active_listings(shop_id))
     log.debug("Fetched %d active listings from shop %s", len(listings), shop_id)
     check_quota(client)
 
+    first_run = store.is_empty()
     new_items = store.sync(listings)
+    if new_items and first_run and not notify_existing:
+        notifier.notify(new_items, initial=True)
+        store.mark_as_notified(new_items)
+        log.info(
+            "First run: %d existing item(s) recorded, notifications start with the next new item",
+            len(new_items),
+        )
+        return 0
     if new_items:
         notifier.notify(add_images(client, new_items))
         store.mark_as_notified(new_items)
@@ -175,7 +198,13 @@ def run(settings: Settings) -> None:
             systemd.ready(f"Watching shop {settings.etsy_shop_name or shop_id}")
             while not stop.is_set():
                 try:
-                    new = run_once(client, store, notifier, shop_id)
+                    new = run_once(
+                        client,
+                        store,
+                        notifier,
+                        shop_id,
+                        notify_existing=settings.notify_existing_on_first_run,
+                    )
                     settings.heartbeat_path.touch()
                     systemd.status(f"Last poll {_now()}: {new} new item(s){_quota_status(client)}")
                 except (EtsyError, NotificationError) as e:

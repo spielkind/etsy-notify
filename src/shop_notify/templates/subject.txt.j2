@@ -1,1 +1,6 @@
-{{ listings | length }} new item{{ "s" if listings | length != 1 }} in {{ shop_name or "the shop" }}
+{% set count = listings | length %}
+{% if initial %}
+First run: {{ count }} item{{ "s" if count != 1 }} currently in {{ shop_name or "the shop" }} (recorded, not notified)
+{% else %}
+{{ count }} new item{{ "s" if count != 1 }} in {{ shop_name or "the shop" }}
+{% endif %}

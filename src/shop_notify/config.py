@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     notify_urls: SecretStr | None = None
     # Print notifications to stdout: "auto" = only if no other targets are configured
     notify_console: Literal["auto"] | bool = "auto"
+    # On the first run (empty database) existing items are only recorded, not notified
+    notify_existing_on_first_run: bool = False
     # Directory with custom subject.txt.j2 / body.txt.j2 / body.html.j2 templates
     notify_template_dir: Path | None = None
 

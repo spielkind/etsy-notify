@@ -25,6 +25,9 @@ class ListingStore:
     def close(self) -> None:
         self._db.close()
 
+    def is_empty(self) -> bool:
+        return self._db.execute("SELECT 1 FROM listings LIMIT 1").fetchone() is None
+
     def sync(self, listings: Iterable[Listing]) -> list[Listing]:
         """Store the current listings, drop vanished notified ones, return un-notified ones.
 

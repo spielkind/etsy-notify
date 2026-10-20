@@ -61,9 +61,11 @@ class RecordingNotifier:
     def __init__(self) -> None:
         self.calls: list[list[int]] = []
         self.images: list[list[str | None]] = []
+        self.initial: list[bool] = []
 
-    def notify(self, listings: Sequence[Listing]) -> None:
+    def notify(self, listings: Sequence[Listing], *, initial: bool = False) -> None:
         self.calls.append([item.listing_id for item in listings])
+        self.initial.append(initial)
         self.images.append([item.image_url for item in listings])
 
 
@@ -94,7 +96,7 @@ def test_build_notifier_console() -> None:
     ("console", "urls", "expected"),
     [
         ("auto", None, ["console"]),
-        ("auto", "shoptest://a", ["shoptest://"]),
+        ("auto", "shoptest://a", ["console (first run only)", "shoptest://"]),
         (True, "shoptest://a", ["console", "shoptest://"]),
         (True, None, ["console"]),
         (False, "shoptest://a", ["shoptest://"]),
@@ -127,7 +129,9 @@ def test_multi_notifier_forwards_to_all(
 
 def test_build_notifier_apprise(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO)
-    notifier = cli.build_notifier(_settings(notify_urls="mailtos://me:pw@gmail.com"))
+    notifier = cli.build_notifier(
+        _settings(notify_urls="mailtos://me:pw@gmail.com", notify_console=False)
+    )
 
     assert isinstance(notifier, AppriseNotifier)
     assert "mailtos://me:****@gmail.com/" in caplog.text
@@ -171,8 +175,8 @@ def test_run_once_notifies_only_new_items(caplog: pytest.LogCaptureFixture) -> N
     store = ListingStore(":memory:")
     notifier = RecordingNotifier()
 
-    assert cli.run_once(client, store, notifier, 42) == 2
-    assert cli.run_once(client, store, notifier, 42) == 0
+    assert cli.run_once(client, store, notifier, 42, notify_existing=True) == 2
+    assert cli.run_once(client, store, notifier, 42, notify_existing=True) == 0
     assert notifier.calls == [[1, 2]]
     assert notifier.images == [[None, "https://img/2.jpg"]]
     client.listing_images.assert_called_once_with([1, 2])
@@ -193,7 +197,7 @@ def test_run_once_does_not_log_items_if_notification_fails(
     notifier.notify.side_effect = NotificationError("all targets failed")
 
     with pytest.raises(NotificationError):
-        cli.run_once(client, store, notifier, 42)
+        cli.run_once(client, store, notifier, 42, notify_existing=True)
 
     assert "New item:" not in caplog.text
     assert [i.listing_id for i in store.sync([make_listing(1)])] == [1]
@@ -209,7 +213,7 @@ def test_run_once_notifies_without_images_if_loading_fails(
     store = ListingStore(":memory:")
     notifier = RecordingNotifier()
 
-    assert cli.run_once(client, store, notifier, 42) == 1
+    assert cli.run_once(client, store, notifier, 42, notify_existing=True) == 1
     assert notifier.images == [[None]]
     assert "Could not load listing images" in caplog.text
     store.close()
@@ -270,7 +274,9 @@ def test_main_polls_until_signal(
         cli.main([])
 
     assert listings.call_count == 2
-    assert "1 new item in someshop\n\nItem 1\n" in capsys.readouterr().out
+    assert "First run: 1 item currently in someshop (recorded, not notified)\n\nItem 1\n" in (
+        capsys.readouterr().out
+    )
     assert (tmp_path / "test.heartbeat").exists()
 
 
@@ -291,7 +297,7 @@ def test_main_logs_unexpected_errors(
     }.items():
         monkeypatch.setenv(key, value)
 
-    def boom(*_args: object) -> int:
+    def boom(*_args: object, **_kwargs: object) -> int:
         signal.raise_signal(signal.SIGINT)
         raise RuntimeError("boom")
 
@@ -397,7 +403,7 @@ def test_main_reports_to_systemd(
 
     results: list[int | Exception] = [2, EtsyError("403 not active"), RuntimeError("boom")]
 
-    def fake_run_once(client: EtsyClient, *_args: object) -> int:
+    def fake_run_once(client: EtsyClient, *_args: object, **_kwargs: object) -> int:
         client.quota = Quota(remaining=4711, limit=5000)
         result = results.pop(0)
         if not results:
@@ -418,3 +424,61 @@ def test_main_reports_to_systemd(
     assert messages[2].endswith("failed: 403 not active")
     assert messages[3].endswith("failed with an unexpected error")
     assert messages[-1] == "STOPPING=1"
+
+
+def test_first_run_records_existing_items_silently(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    client = _client()
+    client.active_listings.return_value = [make_listing(1), make_listing(2)]
+    store = ListingStore(":memory:")
+    notifier = RecordingNotifier()
+
+    assert cli.run_once(client, store, notifier, 42) == 0
+    client.active_listings.return_value = [make_listing(1), make_listing(2), make_listing(3)]
+    client.listing_images.return_value = {}
+    assert cli.run_once(client, store, notifier, 42) == 1
+
+    assert notifier.calls == [[1, 2], [3]]
+    assert notifier.initial == [True, False]
+    client.listing_images.assert_called_once_with([3])
+    assert "First run: 2 existing item(s) recorded" in caplog.text
+    assert "New item: Item 1" not in caplog.text
+    assert "New item: Item 3" in caplog.text
+    store.close()
+
+
+def test_first_run_with_notify_existing_sends_everything() -> None:
+    client = _client()
+    client.active_listings.return_value = [make_listing(1)]
+    client.listing_images.return_value = {}
+    store = ListingStore(":memory:")
+    notifier = RecordingNotifier()
+
+    assert cli.run_once(client, store, notifier, 42, notify_existing=True) == 1
+    assert notifier.initial == [False]
+    store.close()
+
+
+def test_first_run_console_and_apprise(
+    sent: list[dict[str, object]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    notifier = cli.build_notifier(_settings(notify_urls="shoptest://a"))
+    assert notifier.targets == ["console (first run only)", "shoptest://"]
+
+    notifier.notify([make_listing(1)], initial=True)
+    out = capsys.readouterr().out
+    assert out.startswith("First run: 1 item currently in the shop (recorded, not notified)")
+    assert sent == []
+
+    notifier.notify([make_listing(2)])
+    assert capsys.readouterr().out == ""
+    assert len(sent) == 1
+
+
+def test_first_run_console_respects_settings() -> None:
+    assert cli.build_notifier(
+        _settings(notify_urls="shoptest://a", notify_console=False)
+    ).targets == ["shoptest://"]
+    assert cli.build_notifier(
+        _settings(notify_urls="shoptest://a", notify_existing_on_first_run=True)
+    ).targets == ["shoptest://"]

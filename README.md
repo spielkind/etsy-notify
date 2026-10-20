@@ -29,6 +29,18 @@ Every few minutes Shop Notify fetches the active listings of the shop from the [
   <img alt="Lifecycle of a listing: New, then Notified once sent, then Forgotten when it disappears from the shop; if it re-appears it is New again. Failed notifications are retried with the next poll." src="docs/lifecycle-light.svg">
 </picture>
 
+### First run
+When the database is empty, all items currently in the shop would be "new". Instead of flooding your phone, Shop Notify only **records** them on the first run and prints them to the console; notifications start with the next new item:
+
+```text
+First run: 87 items currently in YourShop (recorded, not notified)
+…
+```
+
+Set `NOTIFY_EXISTING_ON_FIRST_RUN=true` to send them to all targets anyway. To start over, delete the database (`DB_PATH`).
+
+### Example notification
+
 A notification on your phone (plain text) looks like this – e-mails additionally show the item picture:
 
 ```text
@@ -70,7 +82,8 @@ All settings are read from `.env` in the working directory or from environment v
 | `POLL_INTERVAL` | `300` | Seconds between two polls (minimum 10), see [below](#choosing-the-poll-interval) |
 | `NOTIFY_CONFIG` | – | Path to an Apprise YAML file with notification targets |
 | `NOTIFY_URLS` | – | One or more Apprise URLs, short form for simple setups |
-| `NOTIFY_CONSOLE` | `auto` | Print notifications to stdout: `auto` only if no other targets are configured, `true` always (in addition to them), `false` never |
+| `NOTIFY_CONSOLE` | `auto` | Print notifications to stdout: `auto` only if no other targets are configured (plus the [first run](#first-run)), `true` always (in addition to them), `false` never |
+| `NOTIFY_EXISTING_ON_FIRST_RUN` | `false` | Send the items already in the shop on the [first run](#first-run) to all targets |
 | `NOTIFY_TEMPLATE_DIR` | – | Directory with [custom message templates](#message-templates) |
 | `DB_PATH` | `shop-notify.db` | SQLite database of seen items |
 | `HEARTBEAT_FILE` | next to `DB_PATH` | Touched after every successful poll, used by the [health check](#health-check) |
@@ -115,7 +128,7 @@ For a single target, `NOTIFY_URLS` is enough, e.g. `NOTIFY_URLS="ntfys://ntfy.sh
 ### Message templates
 E-mails are sent as HTML with the item's main image, title, price and date; all other services get the compact plain-text version shown above.
 
-To customise them, copy any of the [built-in templates](src/shop_notify/templates/) (`subject.txt.j2`, `body.txt.j2`, `body.html.j2`) into a directory and set `NOTIFY_TEMPLATE_DIR` to it – files you don't copy keep their default. Templates use [Jinja2](https://jinja.palletsprojects.com/templates/); the variables are `listings` (with `title`, `url`, `price`, `image_url`, `last_modified`) and `shop_name`, and the `localtime` filter formats a date. Values are HTML-escaped automatically in `*.html.j2`.
+To customise them, copy any of the [built-in templates](src/shop_notify/templates/) (`subject.txt.j2`, `body.txt.j2`, `body.html.j2`) into a directory and set `NOTIFY_TEMPLATE_DIR` to it – files you don't copy keep their default. Templates use [Jinja2](https://jinja.palletsprojects.com/templates/); the variables are `listings` (with `title`, `url`, `price`, `image_url`, `last_modified`), `shop_name` and `initial` (true for the [first run](#first-run)), and the `localtime` filter formats a date. Values are HTML-escaped automatically in `*.html.j2`.
 
 ## Creating an Etsy app
 Shop Notify only reads public listings, so it needs an API key but no OAuth login.
@@ -285,9 +298,9 @@ Not yet with a single instance – run one instance per shop with its own `.env`
 </details>
 
 <details>
-<summary>On first start I got a notification for every item in the shop</summary>
+<summary>Why didn't I get notified about the items already in the shop?</summary>
 
-The database is empty at first, so all active listings are new. Start once without notification targets (console only) to fill the database, then add your targets.
+On the [first run](#first-run) existing items are only recorded, so you are not flooded with notifications. Set `NOTIFY_EXISTING_ON_FIRST_RUN=true` and delete the database to receive them once.
 </details>
 
 ## Development

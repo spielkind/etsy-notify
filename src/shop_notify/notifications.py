@@ -22,7 +22,9 @@ class Notifier(Protocol):
         """Human-readable targets with credentials masked."""
         ...
 
-    def notify(self, listings: Sequence[Listing]) -> None: ...
+    def notify(self, listings: Sequence[Listing], *, initial: bool = False) -> None:
+        """Send ``listings``; ``initial`` marks the existing items found on the first run."""
+        ...
 
 
 class NotificationError(Exception):
@@ -69,8 +71,8 @@ class MessageRenderer:
         except jinja2.TemplateError as e:
             raise ValueError(f"invalid template: {e}") from e
 
-    def render(self, listings: Sequence[Listing]) -> Message:
-        context = {"listings": listings, "shop_name": self._shop_name}
+    def render(self, listings: Sequence[Listing], *, initial: bool = False) -> Message:
+        context = {"listings": listings, "shop_name": self._shop_name, "initial": initial}
         subject = self._env.get_template("subject.txt.j2").render(context).strip()
         return Message(
             subject=subject,
@@ -80,17 +82,26 @@ class MessageRenderer:
 
 
 class ConsoleNotifier:
-    """Prints notifications to stdout, useful for debugging."""
+    """Prints notifications to stdout.
 
-    def __init__(self, renderer: MessageRenderer | None = None) -> None:
+    With ``first_run_only`` it only prints the existing items found on the first run,
+    so you can see what was recorded while the real targets stay quiet.
+    """
+
+    def __init__(
+        self, renderer: MessageRenderer | None = None, *, first_run_only: bool = False
+    ) -> None:
         self._renderer = renderer or MessageRenderer()
+        self._first_run_only = first_run_only
 
     @property
     def targets(self) -> list[str]:
-        return ["console"]
+        return ["console (first run only)" if self._first_run_only else "console"]
 
-    def notify(self, listings: Sequence[Listing]) -> None:
-        message = self._renderer.render(listings)
+    def notify(self, listings: Sequence[Listing], *, initial: bool = False) -> None:
+        if self._first_run_only and not initial:
+            return
+        message = self._renderer.render(listings, initial=initial)
         print(f"{message.subject}\n\n{message.text}\n")
 
 
@@ -104,9 +115,9 @@ class MultiNotifier:
     def targets(self) -> list[str]:
         return [target for notifier in self._notifiers for target in notifier.targets]
 
-    def notify(self, listings: Sequence[Listing]) -> None:
+    def notify(self, listings: Sequence[Listing], *, initial: bool = False) -> None:
         for notifier in self._notifiers:
-            notifier.notify(listings)
+            notifier.notify(listings, initial=initial)
 
 
 class AppriseNotifier:
@@ -150,8 +161,8 @@ class AppriseNotifier:
             for service in self._services
         ]
 
-    def notify(self, listings: Sequence[Listing]) -> None:
-        if not listings:
+    def notify(self, listings: Sequence[Listing], *, initial: bool = False) -> None:
+        if not listings or initial:
             return
         message = self._renderer.render(listings)
         results = []
