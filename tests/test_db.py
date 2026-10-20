@@ -1,0 +1,31 @@
+from unittest.mock import patch
+
+from etsy_notify.db import ListingStore
+from tests.helpers import make_listing
+
+
+def test_new_listings_are_returned_until_notified() -> None:
+    store = ListingStore(":memory:")
+    items = [make_listing(1), make_listing(2)]
+
+    assert [i.listing_id for i in store.sync(items)] == [1, 2]
+    store.mark_as_notified(items)
+    assert store.sync(items) == []
+
+
+def test_reappearing_listing_is_notified_again() -> None:
+    store = ListingStore(":memory:")
+    with patch("etsy_notify.db.time.time", return_value=100):
+        store.mark_as_notified(store.sync([make_listing(1), make_listing(2)]))
+    with patch("etsy_notify.db.time.time", return_value=200):
+        assert store.sync([make_listing(2)]) == []
+    with patch("etsy_notify.db.time.time", return_value=300):
+        assert [i.listing_id for i in store.sync([make_listing(1), make_listing(2)])] == [1]
+
+
+def test_unnotified_listing_survives_disappearing() -> None:
+    store = ListingStore(":memory:")
+    with patch("etsy_notify.db.time.time", return_value=100):
+        store.sync([make_listing(1)])
+    with patch("etsy_notify.db.time.time", return_value=200):
+        assert [i.listing_id for i in store.sync([])] == [1]

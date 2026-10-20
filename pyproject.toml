@@ -1,0 +1,42 @@
+[project]
+name = "etsy-notify"
+version = "2.0.0"
+description = "Watch an Etsy shop for new listings and send notifications."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.15"
+dependencies = [
+    "httpx>=0.28",
+    "pydantic>=2.12",
+    "pydantic-settings>=2.11",
+]
+
+[project.scripts]
+etsy-notify = "etsy_notify.__main__:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "respx>=0.22",
+    "ruff>=0.14",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<1"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "PL", "N"]
+ignore = ["PLR2004", "PLR0913"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
