@@ -68,21 +68,34 @@ After every successful poll the tool touches a heartbeat file. To check whether 
 It exits with `0` if the last successful poll is younger than `2 × POLL_INTERVAL + 60 s`, otherwise with `1` (e.g. when Etsy rejects the API key or the network is down). It reads the same configuration as the main command.
 
 ## Running with Docker
-The image works on `linux/amd64` and `linux/arm64` (Raspberry Pi with a 64-bit OS, Apple Silicon). With your `.env` in place:
+Images for `linux/amd64` and `linux/arm64` (Raspberry Pi with a 64-bit OS, Apple Silicon) are published to the GitHub Container Registry as `ghcr.io/spielkind/shop-notify`:
+
+| Tag | Content |
+|---|---|
+| `latest`, `main` | current state of the `main` branch |
+| `X.Y.Z`, `X.Y` | releases (git tags `vX.Y.Z`) |
+| `sha-<commit>` | a specific commit |
+
+With your `.env` in place (only `compose.yaml` and `.env` are needed, no checkout):
 
     mkdir -p data
-    docker compose up -d --build
+    docker compose pull
+    docker compose up -d
 
 - The database and heartbeat file live in `./data` (mounted to `/data`). The container runs as UID 1000, so `data/` must be writable for that user – on a Raspberry Pi the default user `pi` already has UID 1000.
 - Logs go to stdout: `docker compose logs -f`
 - `docker compose ps` shows the health status (`healthy`/`unhealthy`) from `shop-notify healthcheck`. Docker does not restart unhealthy containers by itself; a crashed process is restarted thanks to `restart: unless-stopped`.
-- Update: `git pull && docker compose up -d --build`
+- Update: `docker compose pull && docker compose up -d`
+- Build locally instead of pulling: `docker compose up -d --build`
 
 Without Compose:
 
-    docker build -t shop-notify .
     docker run -d --name shop-notify --restart unless-stopped \
-      --env-file .env -v "$PWD/data:/data" shop-notify
+      --env-file .env -v "$PWD/data:/data" ghcr.io/spielkind/shop-notify:latest
+
+Every published image carries a signed build provenance attestation and an SBOM. Verify that an image was built by this repository's workflow:
+
+    gh attestation verify --owner spielkind oci://ghcr.io/spielkind/shop-notify:latest
 
 ## Running as a systemd service
 Alternative to Docker, e.g. on Raspberry Pi OS. The service runs as its own system user from `/opt/shop-notify`, logs to the journal and is sandboxed (see [`contrib/systemd/shop-notify.service`](contrib/systemd/shop-notify.service)).

@@ -1,7 +1,7 @@
 services:
   shop-notify:
+    image: ghcr.io/spielkind/shop-notify:latest
     build: .
-    image: shop-notify:local
     env_file: .env
     volumes:
       - ./data:/data

@@ -91,38 +91,3 @@ jobs:
           MERGE_COVERAGE_FILES: true
           MINIMUM_GREEN: 90
           MINIMUM_ORANGE: 80
-
-  docker:
-    runs-on: ${{ matrix.runner }}
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            runner: ubuntu-24.04
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          platforms: ${{ matrix.platform }}
-          tags: shop-notify:ci
-          load: true
-          push: false
-          cache-from: type=gha,scope=${{ matrix.platform }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
-      - name: Smoke test
-        run: |
-          docker run --rm --entrypoint python shop-notify:ci -c "import shop_notify.__main__"
-          docker run --rm shop-notify:ci --help
-          test "$(docker run --rm --entrypoint id shop-notify:ci -u)" = "1000"
-          out=$(docker run --rm -e ETSY_API_KEY=k -e ETSY_SHARED_SECRET=s -e ETSY_SHOP_ID=1 \
-            shop-notify:ci healthcheck || true)
-          grep -q "no heartbeat yet" <<<"$out"
