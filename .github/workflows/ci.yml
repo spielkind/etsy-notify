@@ -2,12 +2,18 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [main]
   pull_request:
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.14", "3.15"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7

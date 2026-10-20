@@ -9,7 +9,7 @@ It is meant to run unattended on a small device like a Raspberry Pi.
 *Note:* Currently only a single shop can be watched, and only GMail can be used for email notifications.
 
 ## Prerequisites
-This tool requires Python 3.15+ and uses [uv](https://docs.astral.sh/uv/) for dependency management. Install uv with:
+This tool requires Python 3.14+ and uses [uv](https://docs.astral.sh/uv/) for dependency management. Install uv with:
 
     curl -LsSf https://astral.sh/uv/install.sh | sh
 
