@@ -1,0 +1,20 @@
+# Notification targets for Shop Notify, in Apprise YAML format.
+# Copy to notify.yml (never commit it – it contains passwords) and point
+# NOTIFY_CONFIG at it. All supported services and their URL syntax:
+# https://github.com/caronc/apprise/wiki
+version: 1
+
+urls:
+  # E-mail via Gmail (needs a Google App Password, which requires 2FA).
+  # Every dash below a URL sends one separate e-mail with these settings.
+  - mailtos://you:app-password@gmail.com:
+      # Recipients in bcc don't see each other's addresses
+      - bcc: alice@example.com, bob@example.com, carol@example.com
+        from: Shop Notify <you@gmail.com>
+
+  # Push notification to your phone via ntfy (no account needed:
+  # install the app and subscribe to a long, random topic name)
+  - ntfys://ntfy.sh/shopwatch-change-me-k7f3q9x2
+
+  # Telegram: create a bot with @BotFather, then add it to a chat
+  # - tgram://BOT_TOKEN/CHAT_ID

@@ -1,14 +1,8 @@
-from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
-
-
-class NotifierType(StrEnum):
-    CONSOLE = "console"
-    GMAIL = "gmail"
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -26,23 +20,19 @@ class Settings(BaseSettings):
     log_file: Path | None = Path("shop-notify.log")
     log_level: str = "INFO"
 
-    notifier: NotifierType = NotifierType.CONSOLE
-    gmail_user: str | None = None
-    gmail_password: SecretStr | None = None
-    mail_from: str | None = None
-    mail_to: Annotated[list[str], NoDecode] = []
+    # Apprise notification targets; without any, notifications go to the console only
+    notify_config: Path | None = None
+    notify_urls: SecretStr | None = None
 
-    @field_validator("mail_to", mode="before")
+    @field_validator("log_file", "notify_config", mode="before")
     @classmethod
-    def _split_mail_to(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [addr.strip() for addr in value.split(",") if addr.strip()]
-        return value
-
-    @field_validator("log_file", mode="before")
-    @classmethod
-    def _empty_log_file_disables(cls, value: object) -> object:
+    def _empty_path_is_none(cls, value: object) -> object:
         return None if value == "" else value
+
+    @field_validator("notify_urls", mode="before")
+    @classmethod
+    def _empty_urls_is_none(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
 
     @model_validator(mode="after")
     def _require_shop(self) -> Self:

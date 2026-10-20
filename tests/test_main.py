@@ -9,11 +9,11 @@ import pytest
 import respx
 
 from shop_notify import __main__ as cli
-from shop_notify.config import NotifierType, Settings
+from shop_notify.config import Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError
 from shop_notify.models import Listing
-from shop_notify.notifications import ConsoleNotifier, GmailNotifier
+from shop_notify.notifications import AppriseNotifier, ConsoleNotifier
 from tests.helpers import make_listing
 
 BASE = "https://openapi.etsy.com/v3/application/"
@@ -61,24 +61,18 @@ def test_build_notifier_console() -> None:
     assert isinstance(cli.build_notifier(_settings()), ConsoleNotifier)
 
 
-def test_build_notifier_gmail() -> None:
-    notifier = cli.build_notifier(
-        _settings(
-            notifier=NotifierType.GMAIL,
-            gmail_user="me@gmail.com",
-            gmail_password="pw",
-            mail_to=["a@x.de"],
-        )
-    )
+def test_build_notifier_apprise(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    notifier = cli.build_notifier(_settings(notify_urls="mailtos://me:pw@gmail.com"))
 
-    assert isinstance(notifier, GmailNotifier)
-    assert notifier.sent_from == "me@gmail.com"
-    assert notifier.password == "pw"
+    assert isinstance(notifier, AppriseNotifier)
+    assert "mailtos://me:****@gmail.com/" in caplog.text
+    assert ":pw@" not in caplog.text
 
 
-def test_build_notifier_gmail_requires_credentials() -> None:
-    with pytest.raises(SystemExit, match="GMAIL_USER"):
-        cli.build_notifier(_settings(notifier=NotifierType.GMAIL))
+def test_build_notifier_invalid_config_exits(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="Invalid notification configuration"):
+        cli.build_notifier(_settings(notify_config=tmp_path / "missing.yml"))
 
 
 def test_resolve_shop_id_prefers_configured_id() -> None:

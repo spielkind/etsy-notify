@@ -5,12 +5,16 @@ import threading
 import time
 from collections.abc import Sequence
 from types import FrameType
-from typing import assert_never
 
-from shop_notify.config import NotifierType, Settings
+from shop_notify.config import Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError
-from shop_notify.notifications import ConsoleNotifier, GmailNotifier, Notifier
+from shop_notify.notifications import (
+    AppriseNotifier,
+    ConsoleNotifier,
+    NotificationError,
+    Notifier,
+)
 
 log = logging.getLogger("shop_notify")
 
@@ -25,23 +29,21 @@ def setup_logging(settings: Settings) -> None:
         handlers=handlers,
         force=True,
     )
+    # Apprise logs full target URLs (including credentials) at debug level
+    logging.getLogger("apprise").setLevel(logging.WARNING)
 
 
 def build_notifier(settings: Settings) -> Notifier:
-    match settings.notifier:
-        case NotifierType.CONSOLE:
-            return ConsoleNotifier()
-        case NotifierType.GMAIL:
-            if not (settings.gmail_user and settings.gmail_password and settings.mail_to):
-                raise SystemExit("GMAIL_USER, GMAIL_PASSWORD and MAIL_TO must be set for gmail")
-            return GmailNotifier(
-                user=settings.gmail_user,
-                password=settings.gmail_password.get_secret_value(),
-                sent_from=settings.mail_from or settings.gmail_user,
-                sent_to=settings.mail_to,
-            )
-        case _:
-            assert_never(settings.notifier)
+    if settings.notify_config is None and settings.notify_urls is None:
+        log.info("No notification targets configured, printing to console only")
+        return ConsoleNotifier()
+    urls = settings.notify_urls.get_secret_value() if settings.notify_urls else None
+    try:
+        notifier = AppriseNotifier(urls=urls, config=settings.notify_config)
+    except ValueError as e:
+        raise SystemExit(f"Invalid notification configuration: {e}") from e
+    log.info("Notification targets: %s", ", ".join(notifier.targets))
+    return notifier
 
 
 def resolve_shop_id(client: EtsyClient, settings: Settings) -> int:
@@ -110,7 +112,7 @@ def run(settings: Settings) -> None:
                 try:
                     run_once(client, store, notifier, shop_id)
                     settings.heartbeat_path.touch()
-                except EtsyError as e:
+                except (EtsyError, NotificationError) as e:
                     log.error("%s", e)
                 except Exception:
                     log.exception("Unexpected error during poll")

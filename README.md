@@ -14,7 +14,7 @@ It does that by polling the [Etsy Open API v3](https://developers.etsy.com/docum
 
 It is meant to run unattended on a small device like a Raspberry Pi.
 
-*Note:* Currently only a single shop can be watched, and only GMail can be used for email notifications.
+*Note:* Currently only a single shop can be watched.
 
 ## Prerequisites
 This tool requires Python 3.14+ and uses [uv](https://docs.astral.sh/uv/) for dependency management. Install uv with:
@@ -45,14 +45,36 @@ Copy `.env.example` to `.env` and fill in your values:
 
 - `ETSY_API_KEY` / `ETSY_SHARED_SECRET`: keystring and shared secret from the step above.
 - `ETSY_SHOP_NAME`: name of the shop to watch, as in `etsy.com/shop/<name>`. The numeric ID is looked up at startup. Alternatively set `ETSY_SHOP_ID` directly.
-- `NOTIFIER`: `console` (default, for testing) or `gmail`.
-- For `gmail`: `GMAIL_USER`, `GMAIL_PASSWORD` (a [Google App Password](https://support.google.com/accounts/answer/185833), requires 2FA), `MAIL_FROM` and `MAIL_TO` (comma-separated list).
+- `NOTIFY_CONFIG` / `NOTIFY_URLS`: where to send notifications, see below. Without either, new items are only printed to the console (handy for a first test).
 
 Optional: `POLL_INTERVAL` (seconds, default 60; for a small shop 5–15 minutes is usually plenty), `DB_PATH`, `LOG_FILE` (empty to log to stdout only), `LOG_LEVEL`, `HEARTBEAT_FILE` (default: next to the database).
 
 Only listing ID, title, URL and modification time are stored locally; entries of listings that have vanished are removed after they were notified. If Etsy responds with `429 Too Many Requests`, the tool waits as long as the `retry-after` header asks before retrying.
 
 All settings can also be passed as environment variables.
+
+### Notifications
+Notifications are sent with [Apprise](https://github.com/caronc/apprise), so e-mail, [ntfy](https://ntfy.sh), Telegram, Signal, Discord, Pushover and [many more](https://github.com/caronc/apprise/wiki) are supported – also several at once.
+
+For more than one target, use a config file. Copy [`notify.example.yml`](notify.example.yml) to `notify.yml`, adjust it and set `NOTIFY_CONFIG=notify.yml`:
+
+```yaml
+version: 1
+urls:
+  # One e-mail to several people who don't see each other's address
+  - mailtos://you:app-password@gmail.com:
+      - bcc: alice@example.com, bob@example.com
+  # Push notification to your phone
+  - ntfys://ntfy.sh/your-long-random-topic
+```
+
+For a single target, `NOTIFY_URLS` in `.env` is enough, e.g. `NOTIFY_URLS="ntfys://ntfy.sh/your-long-random-topic"`. Both can be combined.
+
+- **E-mail** recipients don't need to do anything. With Gmail you need a [Google App Password](https://support.google.com/accounts/answer/185833) (requires 2FA); Gmail allows about 500 recipients per day.
+- **ntfy** needs no account: install the app and subscribe to a long, random topic name – everyone who knows the name can read it.
+- The configuration is checked at startup; credentials are masked in the log.
+- If all targets fail, the items are not marked as notified and are sent again with the next poll. If only some fail, a warning is logged.
+- `notify.yml` and `.env` contain passwords – both are ignored by git and never copied into the Docker image.
 
 ## Running
 
@@ -81,6 +103,8 @@ With your `.env` in place (only `compose.yaml` and `.env` are needed, no checkou
     mkdir -p data
     docker compose pull
     docker compose up -d
+
+To use a notification config file, uncomment the `notify.yml` volume in `compose.yaml` and set `NOTIFY_CONFIG=/config/notify.yml` in `.env`.
 
 - The database and heartbeat file live in `./data` (mounted to `/data`). The container runs as UID 1000, so `data/` must be writable for that user – on a Raspberry Pi the default user `pi` already has UID 1000.
 - Logs go to stdout: `docker compose logs -f`
@@ -114,8 +138,10 @@ Alternative to Docker, e.g. on Raspberry Pi OS. The service runs as its own syst
 
        sudo cp .env.example .env
        sudo nano .env
-       sudo chown root:shop-notify .env
-       sudo chmod 640 .env
+       sudo cp notify.example.yml notify.yml   # optional, set NOTIFY_CONFIG=notify.yml
+       sudo nano notify.yml
+       sudo chown root:shop-notify .env notify.yml
+       sudo chmod 640 .env notify.yml
 
    `DB_PATH` and `LOG_FILE` are set by the unit (`/var/lib/shop-notify/shop-notify.db`, journal only).
 

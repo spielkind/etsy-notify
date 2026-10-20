@@ -5,4 +5,7 @@ services:
     env_file: .env
     volumes:
       - ./data:/data
+      # Notification targets: create notify.yml first (see notify.example.yml)
+      # and set NOTIFY_CONFIG=/config/notify.yml in .env
+      # - ./notify.yml:/config/notify.yml:ro
     restart: unless-stopped

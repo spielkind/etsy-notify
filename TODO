@@ -1,5 +1,4 @@
 - versioning: uv version --bump + git tags vX.Y.Z, CHANGELOG
-- more notification channels via Apprise (Telegram, ntfy, …) instead of Gmail-only
 - email template (optional HTML with listing image)
 - multiple shops
 - optional: systemd watchdog integration (sd_notify) instead of heartbeat file

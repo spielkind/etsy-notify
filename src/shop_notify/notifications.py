@@ -1,9 +1,9 @@
 import logging
-import smtplib
 from collections.abc import Sequence
-from email.message import EmailMessage
-from email.utils import formatdate, make_msgid
+from pathlib import Path
 from typing import Protocol
+
+import apprise
 
 from shop_notify.models import Listing
 
@@ -12,6 +12,14 @@ log = logging.getLogger(__name__)
 
 class Notifier(Protocol):
     def notify(self, listings: Sequence[Listing]) -> None: ...
+
+
+class NotificationError(Exception):
+    """Raised when no notification target could be reached."""
+
+
+def format_subject(listings: Sequence[Listing]) -> str:
+    return f"{len(listings)} new Etsy item(s) available!"
 
 
 def format_listings(listings: Sequence[Listing]) -> str:
@@ -34,39 +42,41 @@ class ConsoleNotifier:
             print(f'NOTIFY: listing ID {item.listing_id} "{item.title}"')
 
 
-class GmailNotifier:
-    def __init__(
-        self,
-        *,
-        user: str,
-        password: str,
-        sent_from: str,
-        sent_to: Sequence[str],
-        host: str = "smtp.gmail.com",
-        port: int = 465,
-    ) -> None:
-        self.user = user
-        self.password = password
-        self.sent_from = sent_from
-        self.sent_to = list(sent_to)
-        self.host = host
-        self.port = port
+class AppriseNotifier:
+    """Sends notifications to any service supported by Apprise."""
 
-    def build_message(self, listings: Sequence[Listing]) -> EmailMessage:
-        msg = EmailMessage()
-        msg["Subject"] = f"{len(listings)} new Etsy item(s) available!"
-        msg["From"] = self.sent_from
-        msg["To"] = ", ".join(self.sent_to)
-        msg["Date"] = formatdate(localtime=True)
-        msg["Message-ID"] = make_msgid()
-        msg.set_content(format_listings(listings))
-        return msg
+    def __init__(self, *, urls: str | None = None, config: Path | None = None) -> None:
+        self._apprise = apprise.Apprise()
+        if config is not None:
+            if not config.is_file():
+                raise ValueError(f"notification config {config} does not exist")
+            apprise_config = apprise.AppriseConfig()
+            apprise_config.add(str(config))
+            self._apprise.add(apprise_config)
+        if urls and not self._apprise.add(urls):
+            raise ValueError("NOTIFY_URLS contains an invalid notification URL")
+        if len(self._apprise) == 0:
+            raise ValueError("no valid notification targets configured")
+
+    @property
+    def targets(self) -> list[str]:
+        """Configured targets with credentials masked, safe for logging."""
+        return [
+            service.url(privacy=True).split("?", 1)[0]  # type: ignore[no-untyped-call]
+            for service in self._apprise
+        ]
 
     def notify(self, listings: Sequence[Listing]) -> None:
         if not listings:
             return
-        msg = self.build_message(listings)
-        with smtplib.SMTP_SSL(self.host, self.port, timeout=30) as server:
-            server.login(self.user, self.password)
-            server.send_message(msg)
-        log.info("Email sent to %s", msg["To"])
+        result = self._apprise.notify(
+            title=format_subject(listings),
+            body=format_listings(listings),
+            body_format=apprise.NotifyFormat.TEXT,
+        )
+        if result.status == apprise.AppriseResultStatus.PARTIAL:
+            log.warning("Some notification targets failed: %s", result)
+        elif not result:
+            raise NotificationError(f"Sending notifications failed: {result}")
+        else:
+            log.info("Notified %d target(s)", len(self._apprise))

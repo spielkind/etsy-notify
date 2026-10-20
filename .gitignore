@@ -89,6 +89,7 @@ celerybeat-schedule
 
 # Environments
 .env
+notify.yml
 .venv
 env/
 venv/
