@@ -5,7 +5,12 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+# The service pings the watchdog while it waits between polls; a single poll
+# (including Etsy rate-limit back-off) may take a few minutes.
+WatchdogSec=15min
+TimeoutStartSec=5min
 User=shop-notify
 Group=shop-notify
 WorkingDirectory=/opt/shop-notify

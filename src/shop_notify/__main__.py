@@ -4,6 +4,7 @@ import signal
 import threading
 import time
 from collections.abc import Sequence
+from datetime import datetime
 from types import FrameType
 
 from shop_notify.config import Settings
@@ -17,6 +18,7 @@ from shop_notify.notifications import (
     NotificationError,
     Notifier,
 )
+from shop_notify.systemd import SystemdNotifier
 
 log = logging.getLogger("shop_notify")
 
@@ -119,9 +121,29 @@ def healthcheck(settings: Settings, now: float | None = None) -> int:
     return 0
 
 
+def _now() -> str:
+    return f"{datetime.now().astimezone():%H:%M}"
+
+
+def _quota_status(client: EtsyClient) -> str:
+    quota = client.quota
+    return f", {quota.remaining}/{quota.limit} API requests left today" if quota else ""
+
+
+def wait_for_next_poll(stop: threading.Event, seconds: float, systemd: SystemdNotifier) -> None:
+    """Sleep until the next poll or a stop request, pinging the systemd watchdog meanwhile."""
+    remaining = float(seconds)
+    while remaining > 0 and not stop.is_set():
+        chunk = min(remaining, systemd.watchdog_interval or remaining)
+        stop.wait(chunk)
+        remaining -= chunk
+        systemd.watchdog()
+
+
 def run(settings: Settings) -> None:
     setup_logging(settings)
     notifier = build_notifier(settings)
+    systemd = SystemdNotifier()
 
     stop = threading.Event()
 
@@ -140,16 +162,21 @@ def run(settings: Settings) -> None:
     ) as client:
         try:
             shop_id = resolve_shop_id(client, settings)
+            systemd.ready(f"Watching shop {settings.etsy_shop_name or shop_id}")
             while not stop.is_set():
                 try:
-                    run_once(client, store, notifier, shop_id)
+                    new = run_once(client, store, notifier, shop_id)
                     settings.heartbeat_path.touch()
+                    systemd.status(f"Last poll {_now()}: {new} new item(s){_quota_status(client)}")
                 except (EtsyError, NotificationError) as e:
                     log.error("%s", e)
+                    systemd.status(f"Last poll {_now()} failed: {str(e)[:200]}")
                 except Exception:
                     log.exception("Unexpected error during poll")
-                stop.wait(settings.poll_interval)
+                    systemd.status(f"Last poll {_now()} failed with an unexpected error")
+                wait_for_next_poll(stop, settings.poll_interval, systemd)
         finally:
+            systemd.stopping()
             store.close()
 
 

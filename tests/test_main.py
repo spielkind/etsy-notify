@@ -14,6 +14,7 @@ from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError, Quota
 from shop_notify.models import Listing
 from shop_notify.notifications import AppriseNotifier, ConsoleNotifier
+from shop_notify.systemd import SystemdNotifier
 from tests.helpers import make_listing
 
 BASE = "https://openapi.etsy.com/v3/application/"
@@ -279,3 +280,76 @@ def test_main_healthcheck_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     with pytest.raises(SystemExit) as exc:
         cli.main(["healthcheck"])
     assert exc.value.code == 0
+
+
+class FakeSystemd:
+    def __init__(self, watchdog_interval: float | None) -> None:
+        self.watchdog_interval = watchdog_interval
+        self.pings = 0
+
+    def watchdog(self) -> None:
+        self.pings += 1
+
+
+def test_wait_for_next_poll_pings_watchdog_in_chunks() -> None:
+    stop = MagicMock()
+    stop.is_set.return_value = False
+    systemd = FakeSystemd(watchdog_interval=100)
+
+    cli.wait_for_next_poll(stop, 250, systemd)  # type: ignore[arg-type]
+
+    assert [c.args[0] for c in stop.wait.call_args_list] == [100, 100, 50]
+    assert systemd.pings == 3
+
+
+def test_wait_for_next_poll_without_watchdog_and_stop() -> None:
+    stop = MagicMock()
+    stop.is_set.side_effect = [False, True]
+    systemd = FakeSystemd(watchdog_interval=None)
+
+    cli.wait_for_next_poll(stop, 300, systemd)  # type: ignore[arg-type]
+
+    stop.wait.assert_called_once_with(300)
+
+
+def test_main_reports_to_systemd(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    restore_signals: None,
+    restore_logging: None,
+) -> None:
+    for key, value in {
+        "ETSY_API_KEY": "key",
+        "ETSY_SHARED_SECRET": "secret",
+        "ETSY_SHOP_ID": "42",
+        "DB_PATH": ":memory:",
+        "HEARTBEAT_FILE": str(tmp_path / "hb"),
+        "LOG_FILE": "",
+    }.items():
+        monkeypatch.setenv(key, value)
+    messages: list[str] = []
+    monkeypatch.setattr(SystemdNotifier, "_send", lambda _self, msg: messages.append(msg))
+
+    results: list[int | Exception] = [2, EtsyError("403 not active"), RuntimeError("boom")]
+
+    def fake_run_once(client: EtsyClient, *_args: object) -> int:
+        client.quota = Quota(remaining=4711, limit=5000)
+        result = results.pop(0)
+        if not results:
+            signal.raise_signal(signal.SIGTERM)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    with (
+        patch.object(cli, "run_once", fake_run_once),
+        patch("threading.Event.wait", return_value=False),
+    ):
+        cli.main([])
+
+    assert messages[0] == "READY=1\nSTATUS=Watching shop 42"
+    assert messages[1].startswith("STATUS=Last poll ")
+    assert messages[1].endswith(": 2 new item(s), 4711/5000 API requests left today")
+    assert messages[2].endswith("failed: 403 not active")
+    assert messages[3].endswith("failed with an unexpected error")
+    assert messages[-1] == "STOPPING=1"

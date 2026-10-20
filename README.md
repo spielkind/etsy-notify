@@ -165,6 +165,14 @@ Useful commands:
     cd /opt/shop-notify && sudo -u shop-notify env DB_PATH=/var/lib/shop-notify/shop-notify.db \
       .venv/bin/shop-notify healthcheck
 
+The unit uses `Type=notify`: systemd only reports the service as started once the shop was found, shows the result of the last poll in `systemctl status` and restarts the process if it hangs (watchdog). For example:
+
+    ● shop-notify.service - Shop listing notifier (shop-notify)
+         Active: active (running) since …
+         Status: "Last poll 14:05: 0 new item(s), 4711/5000 API requests left today"
+
+Etsy being unreachable or rejecting the key does *not* trigger a restart – that would not help; check the status line or the journal instead.
+
 Update:
 
     cd /opt/shop-notify
