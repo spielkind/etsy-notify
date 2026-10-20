@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title desc">
+  <title id="title">Lifecycle of a listing in Shop Notify</title>
+  <desc id="desc">A newly seen listing is notified once. While it stays in the shop nothing happens. When it disappears it is forgotten, and if it re-appears later it counts as new and is notified again. If sending fails, the listing stays new and is retried with the next poll.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B59C91"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#7A3B2E" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="340" rx="20" fill="#FFF8F1"/>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+
+    <!-- transitions -->
+    <g fill="none" stroke="#B59C91" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round">
+      <line x1="318" y1="140" x2="462" y2="140" marker-end="url(#arrow)"/>
+      <line x1="738" y1="140" x2="882" y2="140" marker-end="url(#arrow)"/>
+      <!-- re-appears: back from Forgotten to New -->
+      <path d="M1020 186 C 1020 290, 180 290, 180 194" marker-end="url(#arrow)"/>
+      <!-- self loop on New: send failed -->
+      <path d="M140 94 C 120 30, 240 30, 220 90" marker-end="url(#arrow)"/>
+      <!-- self loop on Notified: still listed -->
+      <path d="M560 94 C 540 30, 660 30, 640 90" marker-end="url(#arrow)"/>
+    </g>
+
+    <g text-anchor="middle" font-size="15">
+      <text x="390" y="126" fill="#264653" font-weight="700">sent</text>
+      <text x="390" y="164" fill="#6B4E45">to at least one target</text>
+      <text x="810" y="126" fill="#264653" font-weight="700">disappears</text>
+      <text x="810" y="164" fill="#6B4E45">from the shop</text>
+      <text x="600" y="282" fill="#264653" font-weight="700">re-appears later → notified again</text>
+      <text x="180" y="30" fill="#6B4E45">sending failed → retry next poll</text>
+      <text x="600" y="30" fill="#6B4E45">still listed → nothing happens</text>
+    </g>
+
+    <!-- states -->
+    <g transform="translate(60 98)">
+      <rect width="240" height="88" rx="44" fill="#FFFFFF" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="240" height="88" rx="44" fill="none" stroke="#E76F51" stroke-width="3"/>
+      <circle cx="44" cy="44" r="16" fill="#E76F51"/>
+      <text x="44" y="50" text-anchor="middle" font-size="16" font-weight="800" fill="#FFFFFF">!</text>
+      <text x="76" y="40" font-size="20" font-weight="800" fill="#264653">New</text>
+      <text x="76" y="62" font-size="14" fill="#6B4E45">not notified yet</text>
+    </g>
+
+    <g transform="translate(480 98)">
+      <rect width="240" height="88" rx="44" fill="#FFFFFF" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="240" height="88" rx="44" fill="none" stroke="#2A9D8F" stroke-width="3"/>
+      <circle cx="44" cy="44" r="16" fill="#2A9D8F"/>
+      <path d="M36 44 l6 6 l11 -12" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="76" y="40" font-size="20" font-weight="800" fill="#264653">Notified</text>
+      <text x="76" y="62" font-size="14" fill="#6B4E45">remembered in SQLite</text>
+    </g>
+
+    <g transform="translate(900 98)">
+      <rect width="240" height="88" rx="44" fill="#FFFFFF" filter="url(#shadow)"/>
+      <rect x="0" y="0" width="240" height="88" rx="44" fill="none" stroke="#B59C91" stroke-width="3"/>
+      <circle cx="44" cy="44" r="16" fill="#B59C91"/>
+      <path d="M37 37 l14 14 M51 37 l-14 14" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+      <text x="76" y="40" font-size="20" font-weight="800" fill="#264653">Forgotten</text>
+      <text x="76" y="62" font-size="14" fill="#6B4E45">deleted from SQLite</text>
+    </g>
+  </g>
+</svg>

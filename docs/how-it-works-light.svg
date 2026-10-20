@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
+  <title id="title">How Shop Notify works</title>
+  <desc id="desc">Shop Notify polls the active listings of a shop from the Etsy Open API, compares them with its local SQLite database and sends new or re-appeared items via Apprise to e-mail, push and chat services.</desc>
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#E76F51"/>
+      <stop offset="1" stop-color="#D1495B"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#7A3B2E" flood-opacity="0.14"/>
+    </filter>
+    <clipPath id="card"><rect width="296" height="240" rx="18"/></clipPath>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B59C91"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="380" rx="20" fill="#FFF8F1"/>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+
+    <!-- Etsy API -->
+    <g transform="translate(40 110)" filter="url(#shadow)">
+      <rect width="230" height="160" rx="16" fill="#FFFFFF"/>
+    </g>
+    <g transform="translate(40 110)">
+      <!-- storefront icon -->
+      <g transform="translate(85 22)">
+        <path d="M0 8 Q0 0 8 0 H52 Q60 0 60 8 V20 H0 Z" fill="url(#accent)"/>
+        <path d="M0 20 q7.5 9 15 0 q7.5 9 15 0 q7.5 9 15 0 q7.5 9 15 0 Z" fill="url(#accent)"/>
+        <rect x="4" y="24" width="52" height="30" rx="4" fill="#FCE6D8"/>
+        <rect x="36" y="32" width="14" height="22" rx="2" fill="#2A9D8F"/>
+      </g>
+      <text x="115" y="108" text-anchor="middle" font-size="20" font-weight="700" fill="#264653">Etsy Open API</text>
+      <text x="115" y="134" text-anchor="middle" font-size="15" fill="#6B4E45">active listings of a shop</text>
+    </g>
+
+    <!-- arrow Etsy -> shop-notify -->
+    <line x1="282" y1="190" x2="440" y2="190" stroke="#B59C91" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round" marker-end="url(#arrow)"/>
+    <text x="361" y="174" text-anchor="middle" font-size="15" fill="#6B4E45">poll every</text>
+    <text x="361" y="214" text-anchor="middle" font-size="15" font-weight="700" fill="#264653">POLL_INTERVAL</text>
+
+    <!-- shop-notify -->
+    <g transform="translate(452 70)" filter="url(#shadow)">
+      <rect width="296" height="240" rx="18" fill="#FFFFFF"/>
+    </g>
+    <g transform="translate(452 70)">
+      <rect width="296" height="8" fill="url(#accent)" clip-path="url(#card)"/>
+      <!-- bell -->
+      <g transform="translate(120 26)">
+        <path d="M28 6 c-11 0 -17 8 -17 18 v9 l-6 7 h46 l-6 -7 v-9 c0 -10 -6 -18 -17 -18 z" fill="#264653"/>
+        <circle cx="28" cy="46" r="5" fill="#264653"/>
+        <circle cx="48" cy="8" r="8" fill="#D1495B" stroke="#FFFFFF" stroke-width="3"/>
+      </g>
+      <text x="148" y="108" text-anchor="middle" font-size="24" font-weight="800" fill="#264653">shop-notify</text>
+      <text x="148" y="134" text-anchor="middle" font-size="15" fill="#6B4E45">new or re-appeared items?</text>
+      <!-- database -->
+      <g transform="translate(104 154)">
+        <ellipse cx="44" cy="10" rx="40" ry="10" fill="#2A9D8F"/>
+        <path d="M4 10 v40 a40 10 0 0 0 80 0 v-40 a40 10 0 0 1 -80 0 z" fill="#2A9D8F" opacity="0.85"/>
+        <path d="M4 30 a40 10 0 0 0 80 0" fill="none" stroke="#FFFFFF" stroke-opacity="0.5" stroke-width="2"/>
+        <ellipse cx="44" cy="10" rx="40" ry="10" fill="#4DB3A6"/>
+      </g>
+      <text x="200" y="196" font-size="14" fill="#6B4E45">SQLite</text>
+      <text x="200" y="214" font-size="14" fill="#6B4E45">seen items</text>
+    </g>
+
+    <!-- arrows shop-notify -> targets -->
+    <path d="M760 160 C 820 160, 820 82, 880 82" fill="none" stroke="#B59C91" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round" marker-end="url(#arrow)"/>
+    <line x1="760" y1="190" x2="880" y2="190" stroke="#B59C91" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round" marker-end="url(#arrow)"/>
+    <path d="M760 220 C 820 220, 820 298, 880 298" fill="none" stroke="#B59C91" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round" marker-end="url(#arrow)"/>
+    <text x="820" y="178" text-anchor="middle" font-size="14" font-weight="700" fill="#264653">Apprise</text>
+
+    <!-- targets -->
+    <g font-size="17">
+      <g transform="translate(892 44)">
+        <rect width="270" height="76" rx="14" fill="#FFFFFF" filter="url(#shadow)"/>
+        <g transform="translate(18 20)">
+          <rect width="48" height="36" rx="6" fill="#E76F51"/>
+          <path d="M3 5 L24 21 L45 5" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>
+        </g>
+        <text x="82" y="34" font-weight="700" fill="#264653">E-mail</text>
+        <text x="82" y="56" font-size="14" fill="#6B4E45">HTML with item images</text>
+      </g>
+      <g transform="translate(892 152)">
+        <rect width="270" height="76" rx="14" fill="#FFFFFF" filter="url(#shadow)"/>
+        <g transform="translate(28 12)">
+          <rect width="30" height="52" rx="6" fill="#2A9D8F"/>
+          <rect x="4" y="7" width="22" height="34" rx="2" fill="#BFE0DC"/>
+          <circle cx="15" cy="46" r="2.5" fill="#FFFFFF"/>
+        </g>
+        <text x="82" y="34" font-weight="700" fill="#264653">Push (ntfy, Pushover)</text>
+        <text x="82" y="56" font-size="14" fill="#6B4E45">straight to your phone</text>
+      </g>
+      <g transform="translate(892 260)">
+        <rect width="270" height="76" rx="14" fill="#FFFFFF" filter="url(#shadow)"/>
+        <g transform="translate(18 18)">
+          <path d="M6 0 H42 Q48 0 48 6 V28 Q48 34 42 34 H18 L8 42 V34 H6 Q0 34 0 28 V6 Q0 0 6 0 z" fill="#264653"/>
+          <circle cx="14" cy="17" r="3" fill="#FFFFFF"/>
+          <circle cx="24" cy="17" r="3" fill="#FFFFFF"/>
+          <circle cx="34" cy="17" r="3" fill="#FFFFFF"/>
+        </g>
+        <text x="82" y="34" font-weight="700" fill="#264653">Telegram, Signal, …</text>
+        <text x="82" y="56" font-size="14" fill="#6B4E45">100+ services via Apprise</text>
+      </g>
+    </g>
+  </g>
+</svg>
