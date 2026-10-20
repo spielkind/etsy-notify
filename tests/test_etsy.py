@@ -84,6 +84,50 @@ def test_rate_limit_is_retried_after_delay() -> None:
 
 
 @respx.mock
+def test_network_error_raises_etsy_error() -> None:
+    respx.get(f"{BASE}shops/42/listings/active").mock(side_effect=httpx.ConnectError("down"))
+    with EtsyClient("key", "secret", base_url=BASE) as client, pytest.raises(EtsyError):
+        list(client.active_listings(42))
+
+
+@respx.mock
+def test_invalid_shop_response_raises_etsy_error() -> None:
+    respx.get(f"{BASE}shops").mock(return_value=httpx.Response(200, json={"oops": True}))
+    with EtsyClient("key", "secret", base_url=BASE) as client, pytest.raises(EtsyError):
+        client.find_shop_id("someshop")
+
+
+@respx.mock
+def test_rate_limit_without_valid_retry_after_uses_backoff() -> None:
+    route = respx.get(f"{BASE}shops/42/listings/active").mock(
+        side_effect=[
+            httpx.Response(429, headers={"retry-after": "soon"}),
+            httpx.Response(429),
+            httpx.Response(200, json={"count": 0, "results": []}),
+        ]
+    )
+    with (
+        patch("etsy_notify.etsy.time.sleep") as sleep,
+        EtsyClient("key", "secret", base_url=BASE) as client,
+    ):
+        assert list(client.active_listings(42)) == []
+
+    assert [c.args[0] for c in sleep.call_args_list] == [1.0, 2.0]
+    assert route.call_count == 3
+
+
+@respx.mock
+def test_rate_limit_gives_up_after_retries() -> None:
+    respx.get(f"{BASE}shops/42/listings/active").mock(return_value=httpx.Response(429))
+    with (
+        patch("etsy_notify.etsy.time.sleep"),
+        EtsyClient("key", "secret", base_url=BASE, retries=1) as client,
+        pytest.raises(EtsyError, match="429"),
+    ):
+        list(client.active_listings(42))
+
+
+@respx.mock
 def test_http_error_raises_etsy_error() -> None:
     respx.get(f"{BASE}shops/42/listings/active").mock(return_value=httpx.Response(403))
     with EtsyClient("key", "secret", base_url=BASE) as client, pytest.raises(EtsyError):

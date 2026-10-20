@@ -3,9 +3,6 @@
   build locally with docker buildx
 - versioning: uv version --bump + git tags vX.Y.Z, CHANGELOG
 - README: Docker usage
-- CI: pytest-cov with --cov-fail-under threshold (add tests for __main__.py)
-- README badges: CI status (GitHub-generated); coverage badge via
-  py-cov-action/python-coverage-comment-action (no external service)
 - more notification channels via Apprise (Telegram, ntfy, …) instead of Gmail-only
 - email template (optional HTML with listing image)
 - multiple shops

@@ -17,7 +17,9 @@ etsy-notify = "etsy_notify.__main__:main"
 [dependency-groups]
 dev = [
     "mypy>=1.18",
+    "pre-commit>=4.7.0",
     "pytest>=8.4",
+    "pytest-cov>=7.1.0",
     "respx>=0.22",
     "ruff>=0.14",
 ]
@@ -39,4 +41,15 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra --cov --cov-report=term-missing"
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["etsy_notify"]
+branch = true
+relative_files = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+exclude_also = ['if __name__ == "__main__":']

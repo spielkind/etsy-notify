@@ -38,6 +38,11 @@ class Settings(BaseSettings):
             return [addr.strip() for addr in value.split(",") if addr.strip()]
         return value
 
+    @field_validator("log_file", mode="before")
+    @classmethod
+    def _empty_log_file_disables(cls, value: object) -> object:
+        return None if value == "" else value
+
     @model_validator(mode="after")
     def _require_shop(self) -> Self:
         if self.etsy_shop_id is None and not self.etsy_shop_name:

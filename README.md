@@ -1,5 +1,8 @@
 # etsy-notify
 
+[![CI](https://github.com/spielkind/etsy-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/spielkind/etsy-notify/actions/workflows/ci.yml)
+[![Coverage](https://raw.githubusercontent.com/spielkind/etsy-notify/python-coverage-comment-action-data/badge.svg)](https://github.com/spielkind/etsy-notify/tree/python-coverage-comment-action-data)
+
 This is a tool that is meant to watch Etsy shop listings for significant changes and notify interested parties.
 
 It does that by polling the [Etsy Open API v3](https://developers.etsy.com/documentation/), analyzing the response and identifying any items that are new in the shop, either brand-new ones or any that have re-appeared. A notification is sent for all new items.
@@ -40,7 +43,7 @@ Copy `.env.example` to `.env` and fill in your values:
 - `NOTIFIER`: `console` (default, for testing) or `gmail`.
 - For `gmail`: `GMAIL_USER`, `GMAIL_PASSWORD` (a [Google App Password](https://support.google.com/accounts/answer/185833), requires 2FA), `MAIL_FROM` and `MAIL_TO` (comma-separated list).
 
-Optional: `POLL_INTERVAL` (seconds, default 60; for a small shop 5–15 minutes is usually plenty), `DB_PATH`, `LOG_FILE`, `LOG_LEVEL`.
+Optional: `POLL_INTERVAL` (seconds, default 60; for a small shop 5–15 minutes is usually plenty), `DB_PATH`, `LOG_FILE` (empty to log to stdout only), `LOG_LEVEL`.
 
 Only listing ID, title, URL and modification time are stored locally; entries of listings that have vanished are removed after they were notified. If Etsy responds with `429 Too Many Requests`, the tool waits as long as the `retry-after` header asks before retrying.
 
@@ -54,10 +57,18 @@ Stop it with `Ctrl+C` or `SIGTERM`.
 
 ## Development
 
+Install the git hooks once; they run ruff, mypy, actionlint and some basic file checks on every commit:
+
+    uv run pre-commit install
+
+Run the checks manually:
+
     uv run ruff format
     uv run ruff check
     uv run mypy src tests
-    uv run pytest
+    uv run pytest          # includes coverage, fails below 90 %
+
+CI additionally tests against all supported Python versions, audits the locked dependencies with `pip-audit`, and posts a coverage report on pull requests.
 
 ## Bugs
 Very probably.
