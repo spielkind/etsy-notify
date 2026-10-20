@@ -1,6 +1,8 @@
+import contextlib
 import logging
 import time
 from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from types import TracebackType
 from typing import Self
 
@@ -48,7 +50,22 @@ class _ListingsWithImagesPage(BaseModel):
     results: list[_ListingWithImages]
 
 
+@dataclass(frozen=True)
+class Quota:
+    """Daily request quota as reported by the Etsy API response headers."""
+
+    remaining: int
+    limit: int
+
+    @property
+    def fraction_left(self) -> float:
+        return self.remaining / self.limit if self.limit else 1.0
+
+
 class EtsyClient:
+    quota: Quota | None = None
+    """Daily quota from the most recent response, if Etsy reported it."""
+
     def __init__(
         self,
         api_key: str,
@@ -79,6 +96,13 @@ class EtsyClient:
     def close(self) -> None:
         self._client.close()
 
+    def _update_quota(self, response: httpx.Response) -> None:
+        with contextlib.suppress(KeyError, ValueError):
+            self.quota = Quota(
+                remaining=int(response.headers["x-remaining-today"]),
+                limit=int(response.headers["x-limit-per-day"]),
+            )
+
     def _get(self, path: str, params: dict[str, str | int]) -> httpx.Response:
         log.debug("Etsy API: GET %s %s", path, params)
         attempt = 0
@@ -87,6 +111,7 @@ class EtsyClient:
                 response = self._client.get(path, params=params)
             except httpx.HTTPError as e:
                 raise EtsyError(f"Request to {path} failed: {e}") from e
+            self._update_quota(response)
 
             if response.status_code != httpx.codes.TOO_MANY_REQUESTS or attempt >= self._retries:
                 break

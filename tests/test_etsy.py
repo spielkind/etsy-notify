@@ -4,7 +4,7 @@ import httpx
 import pytest
 import respx
 
-from shop_notify.etsy import EtsyClient, EtsyError
+from shop_notify.etsy import EtsyClient, EtsyError, Quota
 
 BASE = "https://openapi.etsy.com/v3/application/"
 
@@ -166,6 +166,34 @@ def test_listing_images_invalid_response() -> None:
     respx.get(f"{BASE}listings/batch").mock(return_value=httpx.Response(200, json={"x": 1}))
     with EtsyClient("key", "secret", base_url=BASE) as client, pytest.raises(EtsyError):
         client.listing_images([1])
+
+
+@respx.mock
+def test_quota_is_read_from_response_headers() -> None:
+    respx.get(f"{BASE}shops/42/listings/active").mock(
+        side_effect=[
+            httpx.Response(200, json={"count": 0, "results": []}),
+            httpx.Response(
+                200,
+                json={"count": 0, "results": []},
+                headers={"x-remaining-today": "4711", "x-limit-per-day": "5000"},
+            ),
+            httpx.Response(
+                200, json={"count": 0, "results": []}, headers={"x-remaining-today": "n/a"}
+            ),
+        ]
+    )
+    with EtsyClient("key", "secret", base_url=BASE) as client:
+        list(client.active_listings(42))
+        assert client.quota is None
+        list(client.active_listings(42))
+        assert client.quota == Quota(remaining=4711, limit=5000)
+        assert client.quota is not None
+        assert client.quota.fraction_left == pytest.approx(0.9422)
+        list(client.active_listings(42))
+        assert client.quota == Quota(remaining=4711, limit=5000)
+
+    assert Quota(remaining=0, limit=0).fraction_left == 1.0
 
 
 @respx.mock

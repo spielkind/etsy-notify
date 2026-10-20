@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     etsy_shop_id: int | None = None
     etsy_shop_name: str | None = None
 
-    poll_interval: int = Field(default=60, ge=10)
+    poll_interval: int = Field(default=300, ge=10)
     db_path: Path = Path("shop-notify.db")
     heartbeat_file: Path | None = None
     log_file: Path | None = Path("shop-notify.log")

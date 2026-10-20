@@ -11,12 +11,30 @@ import respx
 from shop_notify import __main__ as cli
 from shop_notify.config import Settings
 from shop_notify.db import ListingStore
-from shop_notify.etsy import EtsyClient, EtsyError
+from shop_notify.etsy import EtsyClient, EtsyError, Quota
 from shop_notify.models import Listing
 from shop_notify.notifications import AppriseNotifier, ConsoleNotifier
 from tests.helpers import make_listing
 
 BASE = "https://openapi.etsy.com/v3/application/"
+
+
+def _client(quota: Quota | None = None) -> MagicMock:
+    client = MagicMock(spec=EtsyClient)
+    client.quota = quota
+    return client
+
+
+def test_check_quota_warns_when_low(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.DEBUG)
+
+    cli.check_quota(_client())
+    cli.check_quota(_client(Quota(remaining=4000, limit=5000)))
+    assert "WARNING" not in caplog.text
+    assert "4000 of 5000" in caplog.text
+
+    cli.check_quota(_client(Quota(remaining=900, limit=5000)))
+    assert "Only 900 of 5000 Etsy API requests left today" in caplog.text
 
 
 def _settings(**overrides: object) -> Settings:
@@ -78,14 +96,14 @@ def test_build_notifier_invalid_config_exits(tmp_path: Path) -> None:
 
 
 def test_resolve_shop_id_prefers_configured_id() -> None:
-    client = MagicMock(spec=EtsyClient)
+    client = _client()
 
     assert cli.resolve_shop_id(client, _settings(etsy_shop_id=7)) == 7
     client.find_shop_id.assert_not_called()
 
 
 def test_resolve_shop_id_by_name() -> None:
-    client = MagicMock(spec=EtsyClient)
+    client = _client()
     client.find_shop_id.return_value = 99
 
     settings = _settings(etsy_shop_id=None, etsy_shop_name="someshop")
@@ -94,7 +112,7 @@ def test_resolve_shop_id_by_name() -> None:
 
 
 def test_resolve_shop_id_not_found_exits() -> None:
-    client = MagicMock(spec=EtsyClient)
+    client = _client()
     client.find_shop_id.side_effect = EtsyError("not found")
 
     with pytest.raises(SystemExit, match="someshop"):
@@ -102,7 +120,7 @@ def test_resolve_shop_id_not_found_exits() -> None:
 
 
 def test_run_once_notifies_only_new_items() -> None:
-    client = MagicMock(spec=EtsyClient)
+    client = _client()
     client.active_listings.return_value = [make_listing(1), make_listing(2)]
     client.listing_images.return_value = {2: "https://img/2.jpg"}
     store = ListingStore(":memory:")
@@ -119,7 +137,7 @@ def test_run_once_notifies_only_new_items() -> None:
 def test_run_once_notifies_without_images_if_loading_fails(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    client = MagicMock(spec=EtsyClient)
+    client = _client()
     client.active_listings.return_value = [make_listing(1)]
     client.listing_images.side_effect = EtsyError("boom")
     store = ListingStore(":memory:")

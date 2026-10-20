@@ -47,7 +47,9 @@ Copy `.env.example` to `.env` and fill in your values:
 - `ETSY_SHOP_NAME`: name of the shop to watch, as in `etsy.com/shop/<name>`. The numeric ID is looked up at startup. Alternatively set `ETSY_SHOP_ID` directly.
 - `NOTIFY_CONFIG` / `NOTIFY_URLS`: where to send notifications, see below. Without either, new items are only printed to the console (handy for a first test).
 
-Optional: `POLL_INTERVAL` (seconds, default 60; for a small shop 5–15 minutes is usually plenty), `DB_PATH`, `LOG_FILE` (empty to log to stdout only), `LOG_LEVEL`, `HEARTBEAT_FILE` (default: next to the database).
+Optional: `POLL_INTERVAL` (seconds, default 300), `DB_PATH`, `LOG_FILE` (empty to log to stdout only), `LOG_LEVEL`, `HEARTBEAT_FILE` (default: next to the database).
+
+**Choosing `POLL_INTERVAL`:** a new Etsy app may make 5,000 requests per day. Every poll needs one request per 100 active listings, so stay above *35 s × pages* to use at most half of the quota (e.g. ≥ 35 s for up to 100 listings, ≥ 70 s for up to 200). The default of 5 minutes needs fewer than 300 requests per day for a typical shop. The tool logs a warning when less than 20 % of the daily quota is left.
 
 Only listing ID, title, URL, price and modification time are stored locally; entries of listings that have vanished are removed after they were notified. If Etsy responds with `429 Too Many Requests`, the tool waits as long as the `retry-after` header asks before retrying.
 

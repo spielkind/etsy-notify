@@ -30,7 +30,7 @@ def test_defaults_with_shop_name(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert settings.etsy_shop_name == "someshop"
     assert settings.etsy_shop_id is None
-    assert settings.poll_interval == 60
+    assert settings.poll_interval == 300
     assert settings.notify_urls is None
     assert settings.notify_config is None
     assert settings.etsy_api_key.get_secret_value() == "key"

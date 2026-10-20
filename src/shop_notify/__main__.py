@@ -71,9 +71,28 @@ def add_images(client: EtsyClient, listings: Sequence[Listing]) -> list[Listing]
     return [item.model_copy(update={"image_url": images.get(item.listing_id)}) for item in listings]
 
 
+QUOTA_WARNING_THRESHOLD = 0.2
+
+
+def check_quota(client: EtsyClient) -> None:
+    """Warn early when the daily Etsy request quota is running low."""
+    quota = client.quota
+    if quota is None:
+        return
+    if quota.fraction_left < QUOTA_WARNING_THRESHOLD:
+        log.warning(
+            "Only %d of %d Etsy API requests left today - consider a larger POLL_INTERVAL",
+            quota.remaining,
+            quota.limit,
+        )
+    else:
+        log.debug("Etsy API requests left today: %d of %d", quota.remaining, quota.limit)
+
+
 def run_once(client: EtsyClient, store: ListingStore, notifier: Notifier, shop_id: int) -> int:
     listings = list(client.active_listings(shop_id))
     log.debug("Fetched %d active listings from shop %s", len(listings), shop_id)
+    check_quota(client)
 
     new_items = store.sync(listings)
     if new_items:
