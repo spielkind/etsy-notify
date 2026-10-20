@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.14-slim-trixie AS builder
+FROM python:3.15-slim-trixie AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.13 /uv /bin/uv
 
 ENV UV_COMPILE_BYTECODE=1 \
@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-editable
 
 
-FROM python:3.14-slim-trixie
+FROM python:3.15-slim-trixie
 
 RUN useradd --system --uid 1000 --home-dir /data --shell /usr/sbin/nologin app \
     && mkdir /data && chown app:app /data
