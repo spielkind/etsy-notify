@@ -33,9 +33,11 @@ def _settings(**overrides: object) -> Settings:
 class RecordingNotifier:
     def __init__(self) -> None:
         self.calls: list[list[int]] = []
+        self.images: list[list[str | None]] = []
 
     def notify(self, listings: Sequence[Listing]) -> None:
         self.calls.append([item.listing_id for item in listings])
+        self.images.append([item.image_url for item in listings])
 
 
 @pytest.fixture
@@ -102,12 +104,30 @@ def test_resolve_shop_id_not_found_exits() -> None:
 def test_run_once_notifies_only_new_items() -> None:
     client = MagicMock(spec=EtsyClient)
     client.active_listings.return_value = [make_listing(1), make_listing(2)]
+    client.listing_images.return_value = {2: "https://img/2.jpg"}
     store = ListingStore(":memory:")
     notifier = RecordingNotifier()
 
     assert cli.run_once(client, store, notifier, 42) == 2
     assert cli.run_once(client, store, notifier, 42) == 0
     assert notifier.calls == [[1, 2]]
+    assert notifier.images == [[None, "https://img/2.jpg"]]
+    client.listing_images.assert_called_once_with([1, 2])
+    store.close()
+
+
+def test_run_once_notifies_without_images_if_loading_fails(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = MagicMock(spec=EtsyClient)
+    client.active_listings.return_value = [make_listing(1)]
+    client.listing_images.side_effect = EtsyError("boom")
+    store = ListingStore(":memory:")
+    notifier = RecordingNotifier()
+
+    assert cli.run_once(client, store, notifier, 42) == 1
+    assert notifier.images == [[None]]
+    assert "Could not load listing images" in caplog.text
     store.close()
 
 
@@ -149,6 +169,9 @@ def test_main_polls_until_signal(
             ),
         ]
     )
+    respx.get(f"{BASE}listings/batch").mock(
+        return_value=httpx.Response(200, json={"count": 1, "results": [{"listing_id": 1}]})
+    )
 
     waits = 0
 
@@ -163,7 +186,7 @@ def test_main_polls_until_signal(
         cli.main([])
 
     assert listings.call_count == 2
-    assert 'NOTIFY: listing ID 1 "Item 1"' in capsys.readouterr().out
+    assert "1 new item in someshop\n\nItem 1\n" in capsys.readouterr().out
     assert (tmp_path / "test.heartbeat").exists()
 
 

@@ -23,8 +23,10 @@ class Settings(BaseSettings):
     # Apprise notification targets; without any, notifications go to the console only
     notify_config: Path | None = None
     notify_urls: SecretStr | None = None
+    # Directory with custom subject.txt.j2 / body.txt.j2 / body.html.j2 templates
+    notify_template_dir: Path | None = None
 
-    @field_validator("log_file", "notify_config", mode="before")
+    @field_validator("log_file", "notify_config", "notify_template_dir", mode="before")
     @classmethod
     def _empty_path_is_none(cls, value: object) -> object:
         return None if value == "" else value

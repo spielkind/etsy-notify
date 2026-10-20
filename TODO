@@ -1,4 +1,3 @@
 - versioning: uv version --bump + git tags vX.Y.Z, CHANGELOG
-- email template (optional HTML with listing image)
 - multiple shops
 - optional: systemd watchdog integration (sd_notify) instead of heartbeat file

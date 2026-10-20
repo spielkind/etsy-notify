@@ -15,7 +15,7 @@ def _listing(i: int) -> dict[str, object]:
         "title": f"Item {i}",
         "url": f"https://etsy.com/listing/{i}",
         "last_modified_timestamp": 1_700_000_000,
-        "price": {"amount": 100},
+        "price": {"amount": 100, "divisor": 100, "currency_code": "EUR"},
     }
 
 
@@ -125,6 +125,47 @@ def test_rate_limit_gives_up_after_retries() -> None:
         pytest.raises(EtsyError, match="429"),
     ):
         list(client.active_listings(42))
+
+
+@respx.mock
+def test_listing_images_picks_main_image_in_batches() -> None:
+    route = respx.get(f"{BASE}listings/batch").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "count": 2,
+                    "results": [
+                        {
+                            "listing_id": 1,
+                            "images": [
+                                {"rank": 2, "url_570xN": "https://img/1b.jpg"},
+                                {"rank": 1, "url_570xN": "https://img/1a.jpg"},
+                            ],
+                        },
+                        {"listing_id": 2, "images": []},
+                    ],
+                },
+            ),
+            httpx.Response(200, json={"count": 1, "results": [{"listing_id": 150}]}),
+        ]
+    )
+    with EtsyClient("key", "secret", base_url=BASE) as client:
+        images = client.listing_images(list(range(1, 151)))
+
+    assert images == {1: "https://img/1a.jpg"}
+    assert route.call_count == 2
+    params = route.calls[0].request.url.params
+    assert params["includes"] == "Images"
+    assert params["listing_ids"].split(",")[:3] == ["1", "2", "3"]
+    assert len(params["listing_ids"].split(",")) == 100
+
+
+@respx.mock
+def test_listing_images_invalid_response() -> None:
+    respx.get(f"{BASE}listings/batch").mock(return_value=httpx.Response(200, json={"x": 1}))
+    with EtsyClient("key", "secret", base_url=BASE) as client, pytest.raises(EtsyError):
+        client.listing_images([1])
 
 
 @respx.mock

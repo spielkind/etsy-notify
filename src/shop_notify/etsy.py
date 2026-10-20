@@ -1,6 +1,6 @@
 import logging
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from types import TracebackType
 from typing import Self
 
@@ -32,6 +32,20 @@ class _Shop(BaseModel):
 class _ShopsPage(BaseModel):
     count: int
     results: list[_Shop]
+
+
+class _ListingImage(BaseModel):
+    rank: int = 0
+    url_570xN: str  # noqa: N815 (Etsy field name)
+
+
+class _ListingWithImages(BaseModel):
+    listing_id: int
+    images: list[_ListingImage] | None = None
+
+
+class _ListingsWithImagesPage(BaseModel):
+    results: list[_ListingWithImages]
 
 
 class EtsyClient:
@@ -100,6 +114,25 @@ class EtsyClient:
             if shop.shop_name.casefold() == shop_name.casefold():
                 return shop.shop_id
         raise EtsyError(f"Shop {shop_name!r} not found")
+
+    def listing_images(self, listing_ids: Sequence[int]) -> dict[int, str]:
+        """Return the URL of the main image (570px wide) for each listing that has one."""
+        images: dict[int, str] = {}
+        for start in range(0, len(listing_ids), PAGE_SIZE):
+            chunk = listing_ids[start : start + PAGE_SIZE]
+            response = self._get(
+                "listings/batch",
+                {"listing_ids": ",".join(map(str, chunk)), "includes": "Images"},
+            )
+            try:
+                page = _ListingsWithImagesPage.model_validate_json(response.content)
+            except ValueError as e:
+                raise EtsyError(f"Invalid response from Etsy API: {e}") from e
+            for listing in page.results:
+                if listing.images:
+                    main = min(listing.images, key=lambda image: image.rank)
+                    images[listing.listing_id] = main.url_570xN
+        return images
 
     def active_listings(self, shop_id: int) -> Iterator[Listing]:
         """Yield all active listings of a shop, newest first, following pagination."""

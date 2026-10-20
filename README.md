@@ -49,7 +49,7 @@ Copy `.env.example` to `.env` and fill in your values:
 
 Optional: `POLL_INTERVAL` (seconds, default 60; for a small shop 5–15 minutes is usually plenty), `DB_PATH`, `LOG_FILE` (empty to log to stdout only), `LOG_LEVEL`, `HEARTBEAT_FILE` (default: next to the database).
 
-Only listing ID, title, URL and modification time are stored locally; entries of listings that have vanished are removed after they were notified. If Etsy responds with `429 Too Many Requests`, the tool waits as long as the `retry-after` header asks before retrying.
+Only listing ID, title, URL, price and modification time are stored locally; entries of listings that have vanished are removed after they were notified. If Etsy responds with `429 Too Many Requests`, the tool waits as long as the `retry-after` header asks before retrying.
 
 All settings can also be passed as environment variables.
 
@@ -75,6 +75,11 @@ For a single target, `NOTIFY_URLS` in `.env` is enough, e.g. `NOTIFY_URLS="ntfys
 - The configuration is checked at startup; credentials are masked in the log.
 - If all targets fail, the items are not marked as notified and are sent again with the next poll. If only some fail, a warning is logged.
 - `notify.yml` and `.env` contain passwords – both are ignored by git and never copied into the Docker image.
+
+#### Message templates
+E-mails are sent as HTML with the item's main image, title, price and date; all other services get a compact plain-text version (title, price, date, link per item).
+
+To customise them, copy any of the [built-in templates](src/shop_notify/templates/) (`subject.txt.j2`, `body.txt.j2`, `body.html.j2`) into a directory and set `NOTIFY_TEMPLATE_DIR` to it – files you don't copy keep their default. Templates use [Jinja2](https://jinja.palletsprojects.com/templates/); the variables are `listings` (with `title`, `url`, `price`, `image_url`, `last_modified`) and `shop_name`, and the `localtime` filter formats a date. Values are HTML-escaped automatically in `*.html.j2`.
 
 ## Running
 

@@ -9,9 +9,11 @@ from types import FrameType
 from shop_notify.config import Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError
+from shop_notify.models import Listing
 from shop_notify.notifications import (
     AppriseNotifier,
     ConsoleNotifier,
+    MessageRenderer,
     NotificationError,
     Notifier,
 )
@@ -34,12 +36,13 @@ def setup_logging(settings: Settings) -> None:
 
 
 def build_notifier(settings: Settings) -> Notifier:
-    if settings.notify_config is None and settings.notify_urls is None:
-        log.info("No notification targets configured, printing to console only")
-        return ConsoleNotifier()
-    urls = settings.notify_urls.get_secret_value() if settings.notify_urls else None
     try:
-        notifier = AppriseNotifier(urls=urls, config=settings.notify_config)
+        renderer = MessageRenderer(settings.notify_template_dir, shop_name=settings.etsy_shop_name)
+        if settings.notify_config is None and settings.notify_urls is None:
+            log.info("No notification targets configured, printing to console only")
+            return ConsoleNotifier(renderer)
+        urls = settings.notify_urls.get_secret_value() if settings.notify_urls else None
+        notifier = AppriseNotifier(urls=urls, config=settings.notify_config, renderer=renderer)
     except ValueError as e:
         raise SystemExit(f"Invalid notification configuration: {e}") from e
     log.info("Notification targets: %s", ", ".join(notifier.targets))
@@ -58,13 +61,23 @@ def resolve_shop_id(client: EtsyClient, settings: Settings) -> int:
     return shop_id
 
 
+def add_images(client: EtsyClient, listings: Sequence[Listing]) -> list[Listing]:
+    """Attach main image URLs; notifications are still sent if this fails."""
+    try:
+        images = client.listing_images([item.listing_id for item in listings])
+    except EtsyError as e:
+        log.warning("Could not load listing images: %s", e)
+        return list(listings)
+    return [item.model_copy(update={"image_url": images.get(item.listing_id)}) for item in listings]
+
+
 def run_once(client: EtsyClient, store: ListingStore, notifier: Notifier, shop_id: int) -> int:
     listings = list(client.active_listings(shop_id))
     log.debug("Fetched %d active listings from shop %s", len(listings), shop_id)
 
     new_items = store.sync(listings)
     if new_items:
-        notifier.notify(new_items)
+        notifier.notify(add_images(client, new_items))
         store.mark_as_notified(new_items)
         log.info("Notified %d new item(s)", len(new_items))
     else:
