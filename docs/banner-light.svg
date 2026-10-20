@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="title desc">
+  <title id="title">Shop Notify</title>
+  <desc id="desc">A storefront with a notification bell, next to the text: Get notified when new items appear in a shop.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFF8F1"/>
+      <stop offset="1" stop-color="#FCE6D8"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#E76F51"/>
+      <stop offset="1" stop-color="#D1495B"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#7A3B2E" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="320" rx="24" fill="url(#bg)"/>
+
+  <!-- background listing cards drifting right -->
+  <g opacity="0.55">
+    <g transform="translate(1215 36) rotate(-3)" opacity="0.6">
+      <rect width="120" height="150" rx="14" fill="#FFFFFF" filter="url(#shadow)"/>
+      <rect x="12" y="12" width="96" height="78" rx="8" fill="#F6D9A8"/>
+      <rect x="12" y="102" width="80" height="10" rx="5" fill="#E9D5CB"/>
+    </g>
+    <g transform="translate(1010 60) rotate(-6)">
+      <rect width="120" height="150" rx="14" fill="#FFFFFF" filter="url(#shadow)"/>
+      <rect x="12" y="12" width="96" height="78" rx="8" fill="#F4C7B4"/>
+      <rect x="12" y="102" width="80" height="10" rx="5" fill="#E9D5CB"/>
+      <rect x="12" y="122" width="50" height="10" rx="5" fill="#E9D5CB"/>
+    </g>
+  </g>
+  <!-- newest listing -->
+  <g transform="translate(1110 104) rotate(4)">
+    <rect width="120" height="150" rx="14" fill="#FFFFFF" filter="url(#shadow)"/>
+    <rect x="12" y="12" width="96" height="78" rx="8" fill="#BFE0DC"/>
+    <rect x="12" y="102" width="80" height="10" rx="5" fill="#E9D5CB"/>
+    <rect x="12" y="122" width="50" height="10" rx="5" fill="#E9D5CB"/>
+    <rect x="64" y="-12" width="66" height="28" rx="14" fill="url(#accent)"/>
+    <text x="97" y="7" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="15" font-weight="800" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">NEW</text>
+  </g>
+
+  <!-- storefront -->
+  <g transform="translate(90 62)" filter="url(#shadow)">
+    <rect x="10" y="60" width="180" height="140" rx="12" fill="#FFFFFF"/>
+    <path d="M0 20 Q0 0 20 0 H180 Q200 0 200 20 V56 H0 Z" fill="url(#accent)"/>
+    <path d="M0 56 q20 24 40 0 q20 24 40 0 q20 24 40 0 q20 24 40 0 q20 24 40 0 Z" fill="url(#accent)"/>
+    <rect x="30" y="98" width="70" height="70" rx="8" fill="#FCE6D8"/>
+    <rect x="118" y="98" width="52" height="102" rx="6" fill="#2A9D8F"/>
+    <circle cx="160" cy="152" r="4" fill="#FFFFFF"/>
+  </g>
+
+  <!-- bell with badge -->
+  <g transform="translate(250 54)">
+    <circle cx="40" cy="44" r="44" fill="#FFFFFF" filter="url(#shadow)"/>
+    <path d="M40 18 c-14 0 -22 11 -22 24 v12 l-7 9 h58 l-7 -9 v-12 c0 -13 -8 -24 -22 -24 z" fill="#264653"/>
+    <circle cx="40" cy="70" r="6" fill="#264653"/>
+    <circle cx="70" cy="14" r="12" fill="#D1495B" stroke="#FFFFFF" stroke-width="4"/>
+  </g>
+
+  <!-- text -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <text x="400" y="160" font-size="76" font-weight="800" fill="#264653" letter-spacing="-1.5">Shop Notify</text>
+    <text x="402" y="212" font-size="28" font-weight="500" fill="#6B4E45">Get notified when new items appear in a shop</text>
+    <rect x="402" y="236" width="96" height="6" rx="3" fill="url(#accent)"/>
+  </g>
+</svg>

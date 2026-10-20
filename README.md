@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg">
+  <img alt="Shop Notify – get notified when new items appear in a shop" src="docs/banner-light.svg">
+</picture>
+
 # etsy-notify
 
 [![CI](https://github.com/spielkind/etsy-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/spielkind/etsy-notify/actions/workflows/ci.yml)
