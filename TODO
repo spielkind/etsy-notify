@@ -1,8 +1,5 @@
 - daemon: systemd unit for running without Docker
-- Dockerfile: multi-arch (linux/amd64, linux/arm64), non-root, /data volume;
-  build locally with docker buildx
 - versioning: uv version --bump + git tags vX.Y.Z, CHANGELOG
-- README: Docker usage
 - more notification channels via Apprise (Telegram, ntfy, …) instead of Gmail-only
 - email template (optional HTML with listing image)
 - multiple shops

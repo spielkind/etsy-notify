@@ -67,6 +67,23 @@ After every successful poll the tool touches a heartbeat file. To check whether 
 
 It exits with `0` if the last successful poll is younger than `2 × POLL_INTERVAL + 60 s`, otherwise with `1` (e.g. when Etsy rejects the API key or the network is down). It reads the same configuration as the main command.
 
+## Running with Docker
+The image works on `linux/amd64` and `linux/arm64` (Raspberry Pi with a 64-bit OS, Apple Silicon). With your `.env` in place:
+
+    mkdir -p data
+    docker compose up -d --build
+
+- The database and heartbeat file live in `./data` (mounted to `/data`). The container runs as UID 1000, so `data/` must be writable for that user – on a Raspberry Pi the default user `pi` already has UID 1000.
+- Logs go to stdout: `docker compose logs -f`
+- `docker compose ps` shows the health status (`healthy`/`unhealthy`) from `etsy-notify healthcheck`. Docker does not restart unhealthy containers by itself; a crashed process is restarted thanks to `restart: unless-stopped`.
+- Update: `git pull && docker compose up -d --build`
+
+Without Compose:
+
+    docker build -t etsy-notify .
+    docker run -d --name etsy-notify --restart unless-stopped \
+      --env-file .env -v "$PWD/data:/data" etsy-notify
+
 ## Development
 
 Install the git hooks once; they run ruff, mypy, actionlint and some basic file checks on every commit:
