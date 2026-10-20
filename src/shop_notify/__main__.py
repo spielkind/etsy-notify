@@ -15,6 +15,7 @@ from shop_notify.notifications import (
     AppriseNotifier,
     ConsoleNotifier,
     MessageRenderer,
+    MultiNotifier,
     NotificationError,
     Notifier,
 )
@@ -38,16 +39,23 @@ def setup_logging(settings: Settings) -> None:
 
 
 def build_notifier(settings: Settings) -> Notifier:
+    notifiers: list[Notifier] = []
     try:
         renderer = MessageRenderer(settings.notify_template_dir, shop_name=settings.etsy_shop_name)
-        if settings.notify_config is None and settings.notify_urls is None:
-            log.info("No notification targets configured, printing to console only")
-            return ConsoleNotifier(renderer)
-        urls = settings.notify_urls.get_secret_value() if settings.notify_urls else None
-        notifier = AppriseNotifier(urls=urls, config=settings.notify_config, renderer=renderer)
+        if settings.notify_config is not None or settings.notify_urls is not None:
+            urls = settings.notify_urls.get_secret_value() if settings.notify_urls else None
+            notifiers.append(
+                AppriseNotifier(urls=urls, config=settings.notify_config, renderer=renderer)
+            )
     except ValueError as e:
         raise SystemExit(f"Invalid notification configuration: {e}") from e
-    log.info("Notification targets: %s", ", ".join(notifier.targets))
+
+    console = settings.notify_console
+    if console is True or (console == "auto" and not notifiers):
+        notifiers.insert(0, ConsoleNotifier(renderer))
+
+    notifier = notifiers[0] if len(notifiers) == 1 else MultiNotifier(notifiers)
+    log.info("Notification targets: %s", ", ".join(notifier.targets) or "none (log only)")
     return notifier
 
 

@@ -2,6 +2,7 @@ import logging
 import signal
 from collections.abc import Iterator, Sequence
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -13,7 +14,12 @@ from shop_notify.config import Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError, Quota
 from shop_notify.models import Listing
-from shop_notify.notifications import AppriseNotifier, ConsoleNotifier, NotificationError
+from shop_notify.notifications import (
+    AppriseNotifier,
+    ConsoleNotifier,
+    MultiNotifier,
+    NotificationError,
+)
 from shop_notify.systemd import SystemdNotifier
 from tests.helpers import make_listing
 
@@ -50,6 +56,8 @@ def _settings(**overrides: object) -> Settings:
 
 
 class RecordingNotifier:
+    targets: ClassVar[list[str]] = ["recording"]
+
     def __init__(self) -> None:
         self.calls: list[list[int]] = []
         self.images: list[list[str | None]] = []
@@ -80,6 +88,41 @@ def restore_logging() -> Iterator[None]:
 
 def test_build_notifier_console() -> None:
     assert isinstance(cli.build_notifier(_settings()), ConsoleNotifier)
+
+
+@pytest.mark.parametrize(
+    ("console", "urls", "expected"),
+    [
+        ("auto", None, ["console"]),
+        ("auto", "shoptest://a", ["shoptest://"]),
+        (True, "shoptest://a", ["console", "shoptest://"]),
+        (True, None, ["console"]),
+        (False, "shoptest://a", ["shoptest://"]),
+        (False, None, []),
+    ],
+)
+def test_build_notifier_console_modes(
+    console: object, urls: str | None, expected: list[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+
+    notifier = cli.build_notifier(_settings(notify_console=console, notify_urls=urls))
+
+    assert notifier.targets == expected
+    if not expected:
+        assert "Notification targets: none (log only)" in caplog.text
+
+
+def test_multi_notifier_forwards_to_all(
+    sent: list[dict[str, object]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    notifier = cli.build_notifier(_settings(notify_console=True, notify_urls="shoptest://a"))
+    assert isinstance(notifier, MultiNotifier)
+
+    notifier.notify([make_listing(1)])
+
+    assert "Item 1" in capsys.readouterr().out
+    assert len(sent) == 1
 
 
 def test_build_notifier_apprise(caplog: pytest.LogCaptureFixture) -> None:

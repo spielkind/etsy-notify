@@ -17,6 +17,11 @@ TEMPLATE_NAMES = ("subject.txt.j2", "body.txt.j2", "body.html.j2")
 
 
 class Notifier(Protocol):
+    @property
+    def targets(self) -> list[str]:
+        """Human-readable targets with credentials masked."""
+        ...
+
     def notify(self, listings: Sequence[Listing]) -> None: ...
 
 
@@ -80,9 +85,28 @@ class ConsoleNotifier:
     def __init__(self, renderer: MessageRenderer | None = None) -> None:
         self._renderer = renderer or MessageRenderer()
 
+    @property
+    def targets(self) -> list[str]:
+        return ["console"]
+
     def notify(self, listings: Sequence[Listing]) -> None:
         message = self._renderer.render(listings)
         print(f"{message.subject}\n\n{message.text}\n")
+
+
+class MultiNotifier:
+    """Forwards notifications to several notifiers, e.g. console and Apprise."""
+
+    def __init__(self, notifiers: Sequence[Notifier]) -> None:
+        self._notifiers = list(notifiers)
+
+    @property
+    def targets(self) -> list[str]:
+        return [target for notifier in self._notifiers for target in notifier.targets]
+
+    def notify(self, listings: Sequence[Listing]) -> None:
+        for notifier in self._notifiers:
+            notifier.notify(listings)
 
 
 class AppriseNotifier:

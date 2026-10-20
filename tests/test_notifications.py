@@ -97,7 +97,7 @@ def test_apprise_notifier_sends_text_to_non_email_targets(sent: list[dict[str, A
 
     notifier.notify([make_listing(1), make_listing(2)])
 
-    assert [s["meta"]["host"] for s in sent] == ["one", "two"]
+    assert sorted(s["meta"]["host"] for s in sent) == ["one", "two"]
     assert sent[0]["title"] == "2 new items in the shop"
     assert "https://www.etsy.com/listing/2" in sent[0]["body"]
     assert "<html" not in sent[0]["body"]

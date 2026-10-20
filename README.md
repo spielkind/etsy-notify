@@ -70,6 +70,7 @@ All settings are read from `.env` in the working directory or from environment v
 | `POLL_INTERVAL` | `300` | Seconds between two polls (minimum 10), see [below](#choosing-the-poll-interval) |
 | `NOTIFY_CONFIG` | – | Path to an Apprise YAML file with notification targets |
 | `NOTIFY_URLS` | – | One or more Apprise URLs, short form for simple setups |
+| `NOTIFY_CONSOLE` | `auto` | Print notifications to stdout: `auto` only if no other targets are configured, `true` always (in addition to them), `false` never |
 | `NOTIFY_TEMPLATE_DIR` | – | Directory with [custom message templates](#message-templates) |
 | `DB_PATH` | `shop-notify.db` | SQLite database of seen items |
 | `HEARTBEAT_FILE` | next to `DB_PATH` | Touched after every successful poll, used by the [health check](#health-check) |

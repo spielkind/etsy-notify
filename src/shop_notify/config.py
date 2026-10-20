@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     # Apprise notification targets; without any, notifications go to the console only
     notify_config: Path | None = None
     notify_urls: SecretStr | None = None
+    # Print notifications to stdout: "auto" = only if no other targets are configured
+    notify_console: Literal["auto"] | bool = "auto"
     # Directory with custom subject.txt.j2 / body.txt.j2 / body.html.j2 templates
     notify_template_dir: Path | None = None
 
@@ -35,6 +37,11 @@ class Settings(BaseSettings):
     @classmethod
     def _empty_urls_is_none(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("notify_console", mode="before")
+    @classmethod
+    def _normalize_console(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def _require_shop(self) -> Self:
