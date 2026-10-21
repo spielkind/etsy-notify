@@ -335,26 +335,11 @@ On the [first run](#first-run) existing items are only recorded, so you are not 
 
 ```sh
 uv sync
-uv run pre-commit install   # ruff, mypy, actionlint and file checks on every commit
-uv run ruff format && uv run ruff check
-uv run mypy src tests
-uv run pytest               # includes coverage, fails below 90 %
+uv run pre-commit install
+uv run pytest
 ```
 
-CI tests against all supported Python versions, audits the locked dependencies with `pip-audit`, builds the Docker image for both architectures and posts a coverage report on pull requests. Issues and pull requests are welcome – see the [roadmap](https://github.com/spielkind/shop-notify/issues?q=is%3Aopen+label%3Aroadmap) for planned features.
-
-### Releasing
-Changes are listed in [`CHANGELOG.md`](CHANGELOG.md) under *Unreleased*. To publish a release:
-
-```sh
-uv version --bump minor                 # or patch / major / rc; updates pyproject.toml and uv.lock
-# CHANGELOG.md: rename "Unreleased" to "[X.Y.Z] - YYYY-MM-DD", add a new empty "Unreleased"
-git commit -am "chore(release): X.Y.Z"
-git tag -a vX.Y.Z -m "vX.Y.Z"           # SemVer notation, e.g. v1.0.0-rc.2
-git push --follow-tags
-```
-
-The tag triggers the release workflow (checks that it matches the package version and creates a GitHub release from the changelog section – a pre-release for `-rc`/`-beta` versions) and publishes the Docker images `X.Y.Z`, `X.Y` and `latest`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, pull requests and releases. Planned features are on the [roadmap](https://github.com/spielkind/shop-notify/issues?q=is%3Aopen+label%3Aroadmap); security issues please report as described in [SECURITY.md](SECURITY.md).
 
 ## License and disclaimer
 [MIT](LICENSE).

@@ -1,0 +1,59 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Never paste credentials** (Etsy key/secret, passwords,
+        bot tokens). Security problems: please use the
+        [private vulnerability report](https://github.com/spielkind/shop-notify/security/advisories/new).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `shop-notify --version` or the Docker image tag
+      placeholder: shop-notify 1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: How do you run it?
+      options:
+        - Docker / Docker Compose
+        - systemd
+        - locally with uv
+        - other
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: e.g. Raspberry Pi 4 (64-bit OS), Ubuntu 24.04 amd64, macOS
+  - type: input
+    id: targets
+    attributes:
+      label: Notification services involved
+      placeholder: e.g. Gmail, Telegram, ntfy
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: Relevant lines, e.g. from `docker compose logs`. Remove any credentials.
+      render: text

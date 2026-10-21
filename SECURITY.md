@@ -1,0 +1,22 @@
+# Security policy
+
+## Supported versions
+
+Only the latest release (and the current `main` branch) receives fixes.
+
+## Reporting a vulnerability
+
+Please **do not open a public issue** for security problems. Report them privately via
+[GitHub's private vulnerability reporting](https://github.com/spielkind/shop-notify/security/advisories/new)
+instead. You can expect a first answer within a week.
+
+Please include the affected version (`shop-notify --version`), how it is run (Docker,
+systemd, locally) and steps to reproduce.
+
+## Handling secrets
+
+Shop Notify works with credentials: the Etsy API key and shared secret, mail
+passwords and bot tokens in `.env` and `notify.yml`. They are masked in the log, never
+copied into the Docker image and ignored by git. If you share logs or configuration in an
+issue, double-check that no credentials are included – if one leaked, revoke it (Etsy
+app, Google app password, Telegram `@BotFather`).

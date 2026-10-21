@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/spielkind/shop-notify/security/advisories/new
+    about: Please report security problems privately.
+  - name: Apprise notification services
+    url: https://github.com/caronc/apprise/wiki
+    about: URL syntax and setup of the individual notification services.
