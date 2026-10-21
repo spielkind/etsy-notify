@@ -10,7 +10,7 @@ Requires [uv](https://docs.astral.sh/uv/); it installs a matching Python (3.14+)
 
 ```sh
 uv sync
-uv run pre-commit install   # gitleaks, ruff, mypy, actionlint, zizmor and file checks on every commit
+uv run pre-commit install   # gitleaks, hadolint, typos, ruff, mypy, actionlint, zizmor and file checks
 ```
 
 Run the checks:
@@ -38,7 +38,8 @@ Apprise service (see `tests/conftest.py`).
   (`feat: …`, `fix: …`, `docs: …`, `ci: …`, `chore: …`) – pull requests are squash-merged
   and the title becomes the commit message.
 
-CI must pass before merging: secret scan (gitleaks), lint (ruff, mypy, actionlint, zizmor), tests on all supported
+CI must pass before merging: secret scan (gitleaks), lint (ruff, mypy, actionlint, zizmor, hadolint,
+typos), tests on all supported
 Python versions, dependency audit and the Docker build for amd64 and arm64.
 
 ## Dependency updates

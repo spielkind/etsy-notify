@@ -1,0 +1,4 @@
+# typos configuration – https://github.com/crate-ci/typos
+[default.extend-words]
+# Python package name
+certifi = "certifi"

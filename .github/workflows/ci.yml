@@ -28,11 +28,13 @@ jobs:
       - run: uv run ruff check --output-format=github
       - run: uv run mypy src tests
       - name: actionlint
-        run: uvx --from actionlint-py actionlint
+        run: uv run actionlint
       - name: hadolint
         run: uv run pre-commit run hadolint --all-files
+      - name: typos
+        run: uv run typos
       - name: zizmor
-        run: uvx zizmor --format=github .github
+        run: uv run zizmor --format=github .github
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -62,7 +64,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv export --frozen --all-groups --no-emit-project --format requirements-txt -o requirements.txt
-      - run: uvx pip-audit --strict --disable-pip -r requirements.txt
+      - run: uv run --locked pip-audit --strict --disable-pip -r requirements.txt
 
   test:
     runs-on: ubuntu-latest
