@@ -32,8 +32,9 @@ RUN apt-get update \
     && python -m pip uninstall --yes --quiet pip \
     && rm -f /usr/local/bin/pip*
 
-RUN useradd --system --uid 1000 --home-dir /data --shell /usr/sbin/nologin app \
-    && mkdir /data && chown app:app /data
+RUN groupadd --system --gid 1000 app \
+    && useradd --system --uid 1000 --gid 1000 --home-dir /data --shell /usr/sbin/nologin app \
+    && mkdir /data && chown 1000:1000 /data
 
 COPY --from=builder /app/.venv /app/.venv
 
@@ -42,7 +43,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DB_PATH=/data/shop-notify.db \
     LOG_FILE=""
 
-USER app
+USER 1000:1000
 WORKDIR /data
 VOLUME /data
 

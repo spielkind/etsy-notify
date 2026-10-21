@@ -29,6 +29,8 @@ jobs:
       - run: uv run mypy src tests
       - name: actionlint
         run: uvx --from actionlint-py actionlint
+      - name: hadolint
+        run: uv run pre-commit run hadolint --all-files
       - name: zizmor
         run: uvx zizmor --format=github .github
         env:

@@ -1,0 +1,5 @@
+# hadolint configuration – https://github.com/hadolint/hadolint
+ignored:
+  # tzdata is intentionally not pinned to a version: it should always be current,
+  # and the base image itself is pinned by digest
+  - DL3008
