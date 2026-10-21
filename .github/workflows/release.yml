@@ -67,15 +67,23 @@ jobs:
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: dist/*
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.cdx.json
 
-      # Attach the signed provenance bundle to the release, so it can be verified
-      # offline (and is recognised by OpenSSF Scorecard's Signed-Releases check)
+      # Attach the signed provenance to the release, so it can be verified offline:
+      # the Sigstore bundle (gh attestation verify --bundle) and the DSSE envelope as
+      # in-toto JSON lines (slsa-verifier, OpenSSF Scorecard's Signed-Releases check)
       - name: Add provenance bundle
         env:
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
           TAG: ${{ github.ref_name }}
-        run: cp "$BUNDLE" "dist/shop-notify-${TAG#v}.sigstore.json"
+        run: |
+          cp "$BUNDLE" "dist/shop-notify-${TAG#v}.sigstore.json"
+          jq -c '.dsseEnvelope' "$BUNDLE" > "dist/shop-notify-${TAG#v}.intoto.jsonl"
+          jq -e -r '.payloadType == "application/vnd.in-toto+json"' \
+            "dist/shop-notify-${TAG#v}.intoto.jsonl"
 
       - name: Create GitHub release
         env:

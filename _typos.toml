@@ -2,3 +2,5 @@
 [default.extend-words]
 # Python package name
 certifi = "certifi"
+# in-toto attestation format (*.intoto.jsonl)
+intoto = "intoto"

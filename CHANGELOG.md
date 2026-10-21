@@ -8,11 +8,21 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-21
+
+First stable release: verified against the real Etsy API – a new listing in a
+live shop was notified exactly once.
+
 ### Added
+- Releases include the signed build provenance as in-toto JSON lines
+  (`*.intoto.jsonl`) for `slsa-verifier`
 - Documentation of the architecture, the security model (threat model and
   assurance case), governance and the vulnerability handling process;
   Code of Conduct
 - End-to-end test of the Docker image in CI
+
+### Fixed
+- The build provenance of releases no longer lists `dist/.gitignore` as subject
 
 ## [1.0.0-rc.4] - 2026-10-21
 
@@ -124,7 +134,8 @@ until it has been verified against the real Etsy API with an approved key.
 
 Original version for the Etsy API v2 (never tagged).
 
-[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.4...HEAD
+[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.4...v1.0.0
 [1.0.0-rc.4]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.1...v1.0.0-rc.2
