@@ -90,6 +90,13 @@ jobs:
           limit-severities-for-sarif: true
           output: trivy.sarif
           exit-code: ${{ env.SCHEDULED == 'true' && '0' || '1' }}
+      - name: Label scan results
+        if: always() && matrix.platform == 'linux/amd64' && hashFiles('trivy.sarif') != ''
+        env:
+          TOOL: ${{ github.event_name == 'pull_request' && 'Trivy (pull request)' || startsWith(github.ref, 'refs/tags/') && 'Trivy (release build)' || 'Trivy (main)' }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: scripts/sarif-label.sh trivy.sarif "$TOOL" "image built from $REF (${SHA:0:7})"
       - name: Upload scan results to GitHub code scanning
         if: always() && matrix.platform == 'linux/amd64' && hashFiles('trivy.sarif') != ''
         uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
@@ -235,6 +242,8 @@ jobs:
           limit-severities-for-sarif: true
           output: trivy-latest.sarif
           exit-code: "0"
+      - name: Label scan results
+        run: scripts/sarif-label.sh trivy-latest.sarif "Trivy (latest)" "$IMAGE:latest (released image)"
       - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           sarif_file: trivy-latest.sarif

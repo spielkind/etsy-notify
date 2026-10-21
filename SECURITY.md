@@ -21,7 +21,10 @@ systemd, locally) and steps to reproduce.
   and scanned, so that newly published vulnerabilities show up even without changes
   to the repository. These scheduled scans don't fail; findings appear under
   [Security → Code scanning](https://github.com/spielkind/shop-notify/security/code-scanning)
-  (categories `trivy-latest` and `trivy-image`) and in the job summary of the run.
+  and in the job summary of the run. The tool name shows which image is affected:
+  **Trivy (latest)** = the released image, **Trivy (main)** = the current development
+  state (filter with the *Tool* drop-down or e.g. `tool:"Trivy (latest)"`). A finding that
+  only appears for *Trivy (latest)* is fixed by the next release.
 - Python dependencies are monitored by Dependabot.
 
 If the released image is affected and the fix is already in `main` (usually through a
