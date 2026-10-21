@@ -47,8 +47,17 @@ Dependabot proposes grouped updates (weekly for Python packages and actions, mon
 pre-commit hooks) after a cooldown of 7 days. Patch and minor updates are merged
 automatically once all required checks pass; major updates need a manual review. Merges
 don't create a release – they are shipped with the next one (use a patch release for
-urgent security fixes). Note that merges done by the auto-merge workflow don't trigger
-further workflows, so the `main` image is rebuilt with the next regular push.
+urgent security fixes). Merges done by the auto-merge workflow don't trigger further
+workflows; the weekly scheduled Docker run rebuilds the `main` image anyway.
+
+## Weekly maintenance run
+
+Every Monday at 05:00 UTC the Docker workflow rebuilds `main`, scans the released
+`latest` image and deletes old commit images (`sha-…`; the newest 10, releases, `latest`
+and `main` are kept). Vulnerabilities found there don't fail the run – check
+*Security → Code scanning* or the job summary. Start it manually under *Actions → Docker →
+Run workflow*; the cleanup then defaults to a dry run.
+
 
 ## Releasing
 

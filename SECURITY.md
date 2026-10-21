@@ -13,6 +13,20 @@ instead. You can expect a first answer within a week.
 Please include the affected version (`shop-notify --version`), how it is run (Docker,
 systemd, locally) and steps to reproduce.
 
+## Vulnerability scanning
+
+- Every Docker build (pull requests, `main`, releases) is scanned with
+  [Trivy](https://trivy.dev); fixable critical or high vulnerabilities fail the build.
+- Every Monday the released image (`latest`) is scanned again and `main` is rebuilt
+  and scanned, so that newly published vulnerabilities show up even without changes
+  to the repository. These scheduled scans don't fail; findings appear under
+  [Security → Code scanning](https://github.com/spielkind/shop-notify/security/code-scanning)
+  (categories `trivy-latest` and `trivy-image`) and in the job summary of the run.
+- Python dependencies are monitored by Dependabot.
+
+If the released image is affected and the fix is already in `main` (usually through a
+newer base image), a patch release is published.
+
 ## Handling secrets
 
 Shop Notify works with credentials: the Etsy API key and shared secret, mail

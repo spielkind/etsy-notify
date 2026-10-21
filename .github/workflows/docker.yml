@@ -5,16 +5,28 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  # Weekly: rebuild main (base image updates, auto-merged dependencies), scan the
+  # released image and clean up old images
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      cleanup-dry-run:
+        description: Only log which images the cleanup would delete
+        type: boolean
+        default: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions: {}
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
-  PUSH: ${{ github.event_name == 'push' }}
+  PUSH: ${{ github.event_name != 'pull_request' }}
+  # Scheduled/manual runs report vulnerabilities in code scanning instead of failing
+  SCHEDULED: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
 
 jobs:
   build:
@@ -65,7 +77,8 @@ jobs:
             -c "import time; print(time.strftime('%Z'))")
           [[ "$tz" == CET || "$tz" == CEST ]] || { echo "TZ not applied: $tz"; exit 1; }
 
-      # Fail on fixable critical/high vulnerabilities in OS packages and Python libraries
+      # Fixable critical/high vulnerabilities in OS packages and Python libraries fail
+      # the build – except for scheduled runs, which only report them
       - name: Vulnerability scan
         if: matrix.platform == 'linux/amd64'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -75,13 +88,26 @@ jobs:
           ignore-unfixed: true
           format: sarif
           output: trivy.sarif
-          exit-code: "1"
+          exit-code: ${{ env.SCHEDULED == 'true' && '0' || '1' }}
       - name: Upload scan results to GitHub code scanning
         if: always() && matrix.platform == 'linux/amd64' && hashFiles('trivy.sarif') != ''
         uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           sarif_file: trivy.sarif
           category: trivy-image
+      - name: Scan summary
+        if: always() && matrix.platform == 'linux/amd64'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: shop-notify:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: json
+          output: trivy.json
+          exit-code: "0"
+      - name: Write scan summary
+        if: always() && matrix.platform == 'linux/amd64'
+        run: scripts/trivy-summary.sh "image built from this commit" trivy.json
 
       - if: env.PUSH == 'true'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -124,7 +150,7 @@ jobs:
       PLATFORM: ${{ matrix.platform }}
 
   merge:
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -185,3 +211,63 @@ jobs:
           subject-digest: ${{ steps.manifest.outputs.digest }}
           push-to-registry: true
           create-storage-record: false
+
+  # Weekly: scan the released image that is actually deployed (no rebuild)
+  scan-latest:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: merge
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload vulnerability scan results
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Vulnerability scan of ${{ env.IMAGE }}:latest
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:latest
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-latest.sarif
+          exit-code: "0"
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: trivy-latest.sarif
+          category: trivy-latest
+      - name: Scan summary
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:latest
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: json
+          output: trivy-latest.json
+          exit-code: "0"
+      - name: Write scan summary
+        run: scripts/trivy-summary.sh "released image (latest)" trivy-latest.json
+
+  # Weekly: delete old commit images; releases, latest and main are always kept.
+  # Runs only after a successful build so that freshly pushed, still untagged
+  # platform images are never touched (additionally protected by older-than).
+  cleanup:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: [merge, scan-latest]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write # delete package versions
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          token: ${{ github.token }}
+          package: shop-notify
+          delete-tags: sha-*
+          keep-n-tagged: 10
+          exclude-tags: latest,main,*.*
+          delete-untagged: true
+          delete-orphaned-images: true
+          older-than: 1 day
+          validate: true
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.cleanup-dry-run }}
