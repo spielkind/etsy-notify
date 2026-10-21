@@ -30,8 +30,10 @@ All modules are in [`src/shop_notify/`](../src/shop_notify):
    page by page. Each listing is validated on its own; invalid ones are logged and
    skipped.
 2. `ListingStore.sync` stores the current listings and returns those that were not
-   notified yet. Listings that disappeared from the shop are forgotten, so a listing
-   that re-appears counts as new.
+   notified yet. Notified listings that have been missing for `FORGET_AFTER_HOURS`
+   (24 h) are forgotten, so a listing that comes back later is notified again; shorter
+   gaps in Etsy's listing index don't cause notifications. If Etsy returns fewer
+   listings than it counts, nothing is forgotten in that poll.
 3. On the first run (empty database) the new listings are only recorded and printed to
    the console.
 4. Otherwise the main image of each new listing is fetched
@@ -45,7 +47,7 @@ The life cycle of a listing:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="lifecycle-dark.svg">
-  <img alt="Lifecycle of a listing: New, then Notified once sent, then Forgotten when it disappears from the shop; if it re-appears it is New again. Failed notifications are retried with the next poll." src="lifecycle-light.svg">
+  <img alt="Lifecycle of a listing: New, then Notified once sent, then Forgotten once it has been gone from the shop for 24 hours; if it re-appears it is New again. Failed notifications are retried with the next poll." src="lifecycle-light.svg">
 </picture>
 
 ## External interfaces and trust boundaries

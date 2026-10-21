@@ -29,9 +29,8 @@ class ListingStore:
         return self._db.execute("SELECT 1 FROM listings LIMIT 1").fetchone() is None
 
     def sync(self, listings: Iterable[Listing]) -> list[Listing]:
-        """Store the current listings, drop vanished notified ones, return un-notified ones.
+        """Store the current listings and return the un-notified ones.
 
-        Listings that disappear and later re-appear are therefore notified again.
         Un-notified listings are returned in the order given (Etsy: newest first),
         followed by pending ones that are no longer listed.
         """
@@ -49,16 +48,29 @@ class ListingStore:
                 """,
                 rows,
             )
-            self._db.execute(
-                "DELETE FROM listings WHERE request_date < ? AND notified_date IS NOT NULL",
-                (now,),
-            )
 
         cursor = self._db.execute(
             "SELECT result FROM listings WHERE notified_date IS NULL ORDER BY listing_id"
         )
         pending = [Listing.model_validate_json(row[0]) for row in cursor]
         return sorted(pending, key=lambda item: position.get(item.listing_id, len(position)))
+
+    def forget(self, missing_for: float) -> list[Listing]:
+        """Delete notified listings not seen for more than ``missing_for`` seconds.
+
+        A listing that re-appears after that is notified again; one that is only
+        missing for a shorter time (e.g. a gap in Etsy's listing index) is not.
+        """
+        cutoff = int(time.time() - missing_for)
+        with self._db:
+            rows = self._db.execute(
+                """
+                DELETE FROM listings WHERE request_date < ? AND notified_date IS NOT NULL
+                RETURNING result
+                """,
+                (cutoff,),
+            ).fetchall()
+        return [Listing.model_validate_json(row[0]) for row in rows]
 
     def mark_as_notified(self, listings: Iterable[Listing]) -> None:
         now = int(time.time())

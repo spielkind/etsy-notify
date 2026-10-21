@@ -4,7 +4,8 @@
 #
 #   1. first run: the existing listings are recorded, no mail is sent
 #   2. a new listing appears: exactly one HTML mail with title, price and image
-#   3. further polls: no duplicate mail
+#   3. further polls, one of them without an old listing (gap in Etsy's index):
+#      no duplicate mail, nothing forgotten
 #
 # Usage: tests/e2e/run.sh [IMAGE]   (default: shop-notify:ci; needs docker, curl, jq, python3)
 set -euo pipefail
@@ -80,9 +81,11 @@ check_mail '.HTML | contains("12.54")' "price missing"
 check_mail '(.HTML | contains("image.png")) or ((.Inline // []) | length > 0) or ((.Attachments // []) | length > 0)' "image missing"
 check_mail '.HTML | contains("Handmade test item 3") | not' "old listing included"
 
-echo "3. no duplicate on the next polls"
+echo "3. no duplicate on the next polls, even if a listing is briefly missing"
+curl -sf -X POST "http://localhost:$ETSY_PORT/_hide_once" >/dev/null
 sleep 25
 [[ $(mail_count) == 1 ]] || fail "duplicate mail"
 docker logs shop-notify-e2e 2>&1 | grep -q "No new items this time" || fail "no further poll logged"
+docker logs shop-notify-e2e 2>&1 | grep -q "forgotten" && fail "briefly missing listing was forgotten"
 
 echo "OK"

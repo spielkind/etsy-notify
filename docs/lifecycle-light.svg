@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title desc">
   <title id="title">Lifecycle of a listing in Shop Notify</title>
-  <desc id="desc">A newly seen listing is notified once. While it stays in the shop nothing happens. When it disappears it is forgotten, and if it re-appears later it counts as new and is notified again. If sending fails, the listing stays new and is retried with the next poll.</desc>
+  <desc id="desc">A newly seen listing is notified once. While it stays in the shop nothing happens. When it has been gone from the shop for 24 hours (FORGET_AFTER_HOURS) it is forgotten, and if it re-appears later it counts as new and is notified again. If sending fails, the listing stays new and is retried with the next poll.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#B59C91"/>
@@ -29,8 +29,8 @@
     <g text-anchor="middle" font-size="15">
       <text x="390" y="126" fill="#264653" font-weight="700">sent</text>
       <text x="390" y="164" fill="#6B4E45">to at least one target</text>
-      <text x="810" y="126" fill="#264653" font-weight="700">disappears</text>
-      <text x="810" y="164" fill="#6B4E45">from the shop</text>
+      <text x="810" y="126" fill="#264653" font-weight="700">gone for 24 h</text>
+      <text x="810" y="164" fill="#6B4E45">FORGET_AFTER_HOURS</text>
       <text x="600" y="282" fill="#264653" font-weight="700">re-appears later → notified again</text>
       <text x="180" y="30" fill="#6B4E45">sending failed → retry next poll</text>
       <text x="600" y="30" fill="#6B4E45">still listed → nothing happens</text>

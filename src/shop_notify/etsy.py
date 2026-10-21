@@ -63,6 +63,8 @@ class Quota:
 class EtsyClient:
     quota: Quota | None = None
     """Daily quota from the most recent response, if Etsy reported it."""
+    listings_complete: bool = True
+    """Whether the last ``active_listings`` call returned every listing Etsy counted."""
 
     def __init__(
         self,
@@ -157,6 +159,8 @@ class EtsyClient:
     def active_listings(self, shop_id: int) -> Iterator[Listing]:
         """Yield all active listings of a shop, newest first, following pagination."""
         offset = 0
+        seen: set[object] = set()
+        self.listings_complete = False
         while True:
             response = self._get(
                 f"shops/{shop_id}/listings/active",
@@ -175,10 +179,20 @@ class EtsyClient:
                     "has the Etsy API changed?",
                     len(page.results),
                 )
+            seen.update(item.get("listing_id") for item in page.results)
             yield from listings
             offset += len(page.results)
             if not page.results or offset >= page.count:
-                return
+                break
+        # Etsy's listing index is occasionally incomplete, and listings can shift
+        # between pages while paginating
+        self.listings_complete = len(seen) >= page.count
+        if not self.listings_complete:
+            log.warning(
+                "Etsy returned %d of %d active listings - the result may be incomplete",
+                len(seen),
+                page.count,
+            )
 
 
 def _retry_after(response: httpx.Response, default: float) -> float:

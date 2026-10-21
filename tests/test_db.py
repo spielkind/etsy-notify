@@ -22,13 +22,40 @@ def test_new_listings_are_returned_until_notified(store: ListingStore) -> None:
     assert store.sync(items) == []
 
 
-def test_reappearing_listing_is_notified_again(store: ListingStore) -> None:
+def test_reappearing_listing_is_notified_again_after_being_forgotten(
+    store: ListingStore,
+) -> None:
     with patch("shop_notify.db.time.time", return_value=100):
         store.mark_as_notified(store.sync([make_listing(1), make_listing(2)]))
     with patch("shop_notify.db.time.time", return_value=200):
         assert store.sync([make_listing(2)]) == []
+        assert [i.listing_id for i in store.forget(missing_for=99)] == [1]
     with patch("shop_notify.db.time.time", return_value=300):
         assert [i.listing_id for i in store.sync([make_listing(1), make_listing(2)])] == [1]
+
+
+def test_briefly_missing_listing_is_not_notified_again(store: ListingStore) -> None:
+    with patch("shop_notify.db.time.time", return_value=100):
+        store.mark_as_notified(store.sync([make_listing(1), make_listing(2)]))
+    with patch("shop_notify.db.time.time", return_value=200):
+        store.sync([make_listing(2)])
+        assert store.forget(missing_for=100) == []
+    with patch("shop_notify.db.time.time", return_value=300):
+        assert store.sync([make_listing(1), make_listing(2)]) == []
+
+
+def test_forget_keeps_listings_seen_in_this_poll(store: ListingStore) -> None:
+    with patch("shop_notify.db.time.time", return_value=100.9):
+        store.mark_as_notified(store.sync([make_listing(1)]))
+        assert store.forget(missing_for=0) == []
+
+
+def test_forget_keeps_unnotified_listings(store: ListingStore) -> None:
+    with patch("shop_notify.db.time.time", return_value=100):
+        store.sync([make_listing(1)])
+    with patch("shop_notify.db.time.time", return_value=1000):
+        assert store.forget(missing_for=0) == []
+        assert [i.listing_id for i in store.sync([])] == [1]
 
 
 def test_unnotified_listing_survives_disappearing(store: ListingStore) -> None:

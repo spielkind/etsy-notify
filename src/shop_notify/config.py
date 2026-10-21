@@ -61,6 +61,9 @@ class Settings(NotifySettings):
     etsy_shop_id: int | None = None
 
     poll_interval: int = Field(default=300, ge=10)
+    # Hours a notified listing must be missing from the shop before it is forgotten
+    # (and notified again if it re-appears)
+    forget_after_hours: float = Field(default=24, ge=0)
     db_path: Path = Path("shop-notify.db")
     heartbeat_file: Path | None = None
 

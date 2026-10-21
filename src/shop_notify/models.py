@@ -24,6 +24,8 @@ class Listing(BaseModel):
     title: str
     url: str
     last_modified_timestamp: int
+    # When the listing became active; missing in data stored by older versions
+    state_timestamp: int | None = None
     price: Money | None = None
     image_url: str | None = None
 
@@ -41,3 +43,8 @@ class Listing(BaseModel):
     @property
     def last_modified(self) -> datetime:
         return datetime.fromtimestamp(self.last_modified_timestamp, tz=UTC)
+
+    @property
+    def listed(self) -> datetime:
+        """When the listing went online (falls back to its last modification)."""
+        return datetime.fromtimestamp(self.state_timestamp or self.last_modified_timestamp, tz=UTC)
