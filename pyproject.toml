@@ -1,6 +1,6 @@
 [project]
 name = "shop-notify"
-version = "2.0.0"
+version = "1.0.0rc1"
 description = "Watch an Etsy shop for new listings and send notifications."
 readme = "README.md"
 license = "MIT"

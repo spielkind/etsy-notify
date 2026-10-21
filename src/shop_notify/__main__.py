@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from types import FrameType
 
+from shop_notify import __version__
 from shop_notify.config import Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError
@@ -175,6 +176,7 @@ def wait_for_next_poll(stop: threading.Event, seconds: float, systemd: SystemdNo
 
 def run(settings: Settings) -> None:
     setup_logging(settings)
+    log.info("Shop Notify %s starting", __version__)
     notifier = build_notifier(settings)
     systemd = SystemdNotifier()
 
@@ -230,6 +232,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         default="run",
         help="run: poll the shop (default); healthcheck: exit 0 if the last poll was recent",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     args = parser.parse_args(argv)
 
     settings = Settings()

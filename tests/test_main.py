@@ -10,6 +10,7 @@ import pytest
 import respx
 
 from shop_notify import __main__ as cli
+from shop_notify import __version__
 from shop_notify.config import Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError, Quota
@@ -307,7 +308,9 @@ def test_main_logs_unexpected_errors(
     ):
         cli.main([])
 
-    assert "Unexpected error during poll" in log_file.read_text()
+    log_text = log_file.read_text()
+    assert f"Shop Notify {__version__} starting" in log_text
+    assert "Unexpected error during poll" in log_text
 
 
 def test_heartbeat_defaults_next_to_db(tmp_path: Path) -> None:
@@ -482,3 +485,11 @@ def test_first_run_console_respects_settings() -> None:
     assert cli.build_notifier(
         _settings(notify_urls="shoptest://a", notify_existing_on_first_run=True)
     ).targets == ["shoptest://"]
+
+
+def test_version(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--version"])
+
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.strip() == f"shop-notify {__version__}"
