@@ -40,6 +40,9 @@ def setup_logging(settings: Settings) -> None:
     )
     # Apprise logs full target URLs (including credentials) at debug level
     logging.getLogger("apprise").setLevel(logging.WARNING)
+    # httpx logs every request at INFO; only show that when debugging
+    if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
+        logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def build_notifier(settings: Settings) -> Notifier:

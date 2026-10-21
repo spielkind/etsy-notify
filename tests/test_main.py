@@ -612,3 +612,15 @@ def test_invalid_language_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NOTIFY_LANGUAGE", "fr")
     with pytest.raises(ValueError, match="notify_language"):
         NotifySettings()
+
+
+@pytest.mark.parametrize(
+    ("level", "httpx_level"), [("INFO", logging.WARNING), ("DEBUG", logging.NOTSET)]
+)
+def test_setup_logging_quiets_httpx(level: str, httpx_level: int, restore_logging: None) -> None:
+    logging.getLogger("httpx").setLevel(logging.NOTSET)
+
+    cli.setup_logging(_settings(log_level=level))
+
+    assert logging.getLogger("httpx").level == httpx_level
+    logging.getLogger("httpx").setLevel(logging.NOTSET)

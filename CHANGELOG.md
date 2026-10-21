@@ -8,6 +8,10 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+### Changed
+- New items are notified newest first (in Etsy's order) instead of by listing ID
+- HTTP requests are only logged with `LOG_LEVEL=DEBUG`
+
 ## [1.0.0-rc.2] - 2026-10-21
 
 ### Added

@@ -36,3 +36,12 @@ def test_unnotified_listing_survives_disappearing(store: ListingStore) -> None:
         store.sync([make_listing(1)])
     with patch("shop_notify.db.time.time", return_value=200):
         assert [i.listing_id for i in store.sync([])] == [1]
+
+
+def test_new_listings_keep_the_given_order(store: ListingStore) -> None:
+    with patch("shop_notify.db.time.time", return_value=100):
+        store.sync([make_listing(9)])  # pending, will vanish
+    with patch("shop_notify.db.time.time", return_value=200):
+        new = store.sync([make_listing(3), make_listing(1), make_listing(2)])
+
+    assert [i.listing_id for i in new] == [3, 1, 2, 9]

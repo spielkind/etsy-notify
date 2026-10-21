@@ -32,8 +32,12 @@ class ListingStore:
         """Store the current listings, drop vanished notified ones, return un-notified ones.
 
         Listings that disappear and later re-appear are therefore notified again.
+        Un-notified listings are returned in the order given (Etsy: newest first),
+        followed by pending ones that are no longer listed.
         """
         now = int(time.time())
+        listings = list(listings)
+        position = {item.listing_id: index for index, item in enumerate(listings)}
         rows = [(item.listing_id, now, item.model_dump_json()) for item in listings]
 
         with self._db:
@@ -53,7 +57,8 @@ class ListingStore:
         cursor = self._db.execute(
             "SELECT result FROM listings WHERE notified_date IS NULL ORDER BY listing_id"
         )
-        return [Listing.model_validate_json(row[0]) for row in cursor]
+        pending = [Listing.model_validate_json(row[0]) for row in cursor]
+        return sorted(pending, key=lambda item: position.get(item.listing_id, len(position)))
 
     def mark_as_notified(self, listings: Iterable[Listing]) -> None:
         now = int(time.time())
