@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="570" height="428" viewBox="0 0 570 428">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFF8F1"/>
+      <stop offset="1" stop-color="#FCE6D8"/>
+    </linearGradient>
+    <linearGradient id="mug" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#E76F51"/>
+      <stop offset="1" stop-color="#D1495B"/>
+    </linearGradient>
+  </defs>
+  <rect width="570" height="428" fill="url(#bg)"/>
+  <!-- table -->
+  <rect y="320" width="570" height="108" fill="#F4C7B4"/>
+  <ellipse cx="285" cy="330" rx="130" ry="18" fill="#7A3B2E" opacity="0.15"/>
+  <!-- steam -->
+  <g fill="none" stroke="#B59C91" stroke-width="6" stroke-linecap="round" opacity="0.6">
+    <path d="M240 110 q-14 -20 0 -40 q14 -20 0 -40"/>
+    <path d="M285 100 q-14 -20 0 -40 q14 -20 0 -40"/>
+    <path d="M330 110 q-14 -20 0 -40 q14 -20 0 -40"/>
+  </g>
+  <!-- handle -->
+  <path d="M380 170 q70 0 70 60 q0 60 -70 60" fill="none" stroke="#D1495B" stroke-width="22"/>
+  <!-- mug body -->
+  <path d="M180 140 h220 v160 q0 32 -32 32 h-156 q-32 0 -32 -32 z" fill="url(#mug)"/>
+  <ellipse cx="290" cy="140" rx="110" ry="16" fill="#C2414F"/>
+  <ellipse cx="290" cy="142" rx="98" ry="11" fill="#7A3B2E"/>
+  <!-- glaze stripe and dots -->
+  <rect x="180" y="200" width="220" height="16" fill="#FFF8F1" opacity="0.8"/>
+  <g fill="#FFF8F1" opacity="0.8">
+    <circle cx="215" cy="255" r="7"/><circle cx="255" cy="270" r="7"/><circle cx="295" cy="255" r="7"/>
+    <circle cx="335" cy="270" r="7"/><circle cx="370" cy="255" r="7"/>
+  </g>
+  <!-- sample label -->
+  <g transform="translate(20 20)">
+    <rect width="132" height="34" rx="17" fill="#2A9D8F"/>
+    <text x="66" y="23" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="800" fill="#FFFFFF" letter-spacing="1.5">SAMPLE</text>
+  </g>
+</svg>

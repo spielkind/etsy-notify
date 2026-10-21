@@ -1,3 +1,4 @@
+import email
 import logging
 import signal
 from collections.abc import Iterator, Sequence
@@ -11,7 +12,7 @@ import respx
 
 from shop_notify import __main__ as cli
 from shop_notify import __version__
-from shop_notify.config import Settings
+from shop_notify.config import NotifySettings, Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError, Quota
 from shop_notify.models import Listing
@@ -493,3 +494,102 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
 
     assert exc.value.code == 0
     assert capsys.readouterr().out.strip() == f"shop-notify {__version__}"
+
+
+def test_test_notify_console_without_etsy_settings(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["test-notify"])
+
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "[Test] 2 new items in the shop" in out
+    assert "✓ console" in out
+    assert "1 of 1 target(s) succeeded." in out
+    assert list(tmp_path.iterdir()) == []  # no database, heartbeat or log file
+
+
+def test_test_notify_reports_failed_targets(
+    monkeypatch: pytest.MonkeyPatch,
+    sent: list[dict[str, object]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("NOTIFY_URLS", "shoptest://ok, shoptest://fail")
+    monkeypatch.setenv("ETSY_SHOP_NAME", "someshop")
+
+    assert cli.test_notify(NotifySettings()) == 1
+
+    out = capsys.readouterr().out
+    assert out.count("✓ shoptest://") == 1
+    assert out.count("✗ shoptest://") == 1
+    assert "1 of 2 target(s) succeeded." in out
+    assert "✓ console" not in out
+    assert {str(s["title"]) for s in sent} == {"[Test] 2 new items in someshop"}
+
+
+def test_test_notify_html_mail_contains_sample_image() -> None:
+    settings = NotifySettings(_env_file=None)
+    with patch("smtplib.SMTP") as smtp:
+        smtp.return_value.sendmail.return_value = {}
+        assert cli.test_notify(settings, url="mailtos://me:pw@gmail.com") == 0
+
+    (_, _, raw), _ = smtp.return_value.sendmail.call_args
+    mail = email.message_from_string(raw)
+    assert mail["Subject"] == "[Test] 2 new items in the shop"
+    html = next(p for p in mail.walk() if p.get_content_type() == "text/html")
+    payload = html.get_payload(decode=True)
+    assert isinstance(payload, bytes)
+    assert cli.SAMPLE_IMAGE_URL in payload.decode()
+
+
+def test_test_notify_with_url_ignores_configured_targets(
+    monkeypatch: pytest.MonkeyPatch,
+    sent: list[dict[str, object]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("NOTIFY_URLS", "shoptest://configured")
+    monkeypatch.setenv("NOTIFY_CONSOLE", "true")
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["test-notify", "--url", "shoptest://adhoc"])
+
+    assert exc.value.code == 0
+    assert [s["meta"]["host"] for s in sent] == ["adhoc"]  # type: ignore[index]
+    assert "console" not in capsys.readouterr().out
+
+
+def test_test_notify_console_true_adds_console(
+    monkeypatch: pytest.MonkeyPatch,
+    sent: list[dict[str, object]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("NOTIFY_URLS", "shoptest://ok")
+    monkeypatch.setenv("NOTIFY_CONSOLE", "true")
+
+    assert cli.test_notify(NotifySettings()) == 0
+    assert "✓ console" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"NOTIFY_CONSOLE": "false"},
+        {"NOTIFY_URLS": "nonsense://foo"},
+    ],
+)
+def test_test_notify_config_errors(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], env: dict[str, str]
+) -> None:
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    assert cli.test_notify(NotifySettings()) == 2
+    assert "Invalid notification configuration" in capsys.readouterr().err
+
+
+def test_url_only_with_test_notify(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["healthcheck", "--url", "shoptest://x"])
+    assert exc.value.code == 2
+    assert "--url can only be used with test-notify" in capsys.readouterr().err

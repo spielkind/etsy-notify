@@ -1,6 +1,7 @@
 import argparse
 import logging
 import signal
+import sys
 import threading
 import time
 from collections.abc import Sequence
@@ -8,17 +9,19 @@ from datetime import datetime
 from types import FrameType
 
 from shop_notify import __version__
-from shop_notify.config import Settings
+from shop_notify.config import NotifySettings, Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError
-from shop_notify.models import Listing
+from shop_notify.models import Listing, Money
 from shop_notify.notifications import (
     AppriseNotifier,
     ConsoleNotifier,
+    Message,
     MessageRenderer,
     MultiNotifier,
     NotificationError,
     Notifier,
+    Sender,
 )
 from shop_notify.systemd import SystemdNotifier
 
@@ -221,6 +224,73 @@ def run(settings: Settings) -> None:
             store.close()
 
 
+SAMPLE_IMAGE_URL = (
+    "https://raw.githubusercontent.com/spielkind/shop-notify/main/docs/sample-item.png"
+)
+PROJECT_URL = "https://github.com/spielkind/shop-notify"
+
+
+def sample_listings() -> list[Listing]:
+    now = int(time.time())
+    return [
+        Listing(
+            listing_id=1,
+            title='Sample: hand-thrown mug "Morning dew"',
+            url=PROJECT_URL,
+            last_modified_timestamp=now,
+            price=Money(amount=2450, divisor=100, currency_code="EUR"),
+            image_url=SAMPLE_IMAGE_URL,
+        ),
+        Listing(
+            listing_id=2,
+            title="Sample: small vase in sage green (no image)",
+            url=PROJECT_URL,
+            last_modified_timestamp=now,
+            price=Money(amount=1800, divisor=100, currency_code="EUR"),
+        ),
+    ]
+
+
+def build_test_senders(settings: NotifySettings, url: str | None) -> tuple[list[Sender], Message]:
+    """Targets of a test notification: ``url`` only, or all configured ones."""
+    renderer = MessageRenderer(settings.notify_template_dir, shop_name=settings.etsy_shop_name)
+    senders: list[Sender] = []
+    if url:
+        senders.append(AppriseNotifier(urls=url, renderer=renderer))
+    else:
+        if settings.has_notify_targets:
+            urls = settings.notify_urls.get_secret_value() if settings.notify_urls else None
+            senders.append(
+                AppriseNotifier(urls=urls, config=settings.notify_config, renderer=renderer)
+            )
+        console = settings.notify_console
+        if console is True or (console == "auto" and not senders):
+            senders.insert(0, ConsoleNotifier(renderer))
+    if not senders:
+        raise ValueError("no notification targets configured (NOTIFY_CONSOLE=false)")
+    return senders, renderer.render(sample_listings(), test=True)
+
+
+def test_notify(settings: NotifySettings, url: str | None = None) -> int:
+    """Send a sample notification; 0 = all targets ok, 1 = some failed, 2 = config error."""
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    logging.getLogger("apprise").setLevel(logging.WARNING)
+    try:
+        senders, message = build_test_senders(settings, url)
+    except ValueError as e:
+        print(f"Invalid notification configuration: {e}", file=sys.stderr)
+        return 2
+
+    print(f"Sending a test notification with {len(sample_listings())} sample items …\n")
+    deliveries = [delivery for sender in senders for delivery in sender.send(message)]
+    print()
+    for delivery in deliveries:
+        print(f"  {'✓' if delivery.ok else '✗'} {delivery.target}")
+    succeeded = sum(delivery.ok for delivery in deliveries)
+    print(f"\n{succeeded} of {len(deliveries)} target(s) succeeded.")
+    return 0 if succeeded == len(deliveries) else 1
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="shop-notify", description="Watch a shop for new listings and send notifications."
@@ -228,13 +298,23 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["run", "healthcheck"],
+        choices=["run", "healthcheck", "test-notify"],
         default="run",
-        help="run: poll the shop (default); healthcheck: exit 0 if the last poll was recent",
+        help=(
+            "run: poll the shop (default); healthcheck: exit 0 if the last poll was recent; "
+            "test-notify: send a sample notification to all targets"
+        ),
+    )
+    parser.add_argument(
+        "--url", help="test-notify only: send to this Apprise URL instead of the configured targets"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     args = parser.parse_args(argv)
+    if args.url and args.command != "test-notify":
+        parser.error("--url can only be used with test-notify")
 
+    if args.command == "test-notify":
+        raise SystemExit(test_notify(NotifySettings(), args.url))
     settings = Settings()
     if args.command == "healthcheck":
         raise SystemExit(healthcheck(settings))

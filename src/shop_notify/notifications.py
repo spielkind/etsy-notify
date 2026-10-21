@@ -27,6 +27,12 @@ class Notifier(Protocol):
         ...
 
 
+class Sender(Protocol):
+    """Sends an already rendered message, reporting the result per target."""
+
+    def send(self, message: Message) -> list[Delivery]: ...
+
+
 class NotificationError(Exception):
     """Raised when no notification target could be reached."""
 
@@ -86,8 +92,15 @@ class MessageRenderer:
         except jinja2.TemplateError as e:
             raise ValueError(f"invalid template: {e}") from e
 
-    def render(self, listings: Sequence[Listing], *, initial: bool = False) -> Message:
-        context = {"listings": listings, "shop_name": self._shop_name, "initial": initial}
+    def render(
+        self, listings: Sequence[Listing], *, initial: bool = False, test: bool = False
+    ) -> Message:
+        context = {
+            "listings": listings,
+            "shop_name": self._shop_name,
+            "initial": initial,
+            "test": test,
+        }
         subject = self._env.get_template("subject.txt.j2").render(context).strip()
         return Message(
             subject=subject,
@@ -116,8 +129,11 @@ class ConsoleNotifier:
     def notify(self, listings: Sequence[Listing], *, initial: bool = False) -> None:
         if self._first_run_only and not initial:
             return
-        message = self._renderer.render(listings, initial=initial)
+        self.send(self._renderer.render(listings, initial=initial))
+
+    def send(self, message: Message) -> list[Delivery]:
         print(f"{message.subject}\n\n{message.text}\n")
+        return [Delivery("console", ok=True)]
 
 
 class MultiNotifier:

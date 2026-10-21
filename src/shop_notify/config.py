@@ -5,18 +5,13 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
+class NotifySettings(BaseSettings):
+    """Settings needed to send notifications; no Etsy credentials required."""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    etsy_api_key: SecretStr
-    etsy_shared_secret: SecretStr
-    etsy_api_endpoint: str = "https://openapi.etsy.com/v3/application/"
-    etsy_shop_id: int | None = None
     etsy_shop_name: str | None = None
 
-    poll_interval: int = Field(default=300, ge=10)
-    db_path: Path = Path("shop-notify.db")
-    heartbeat_file: Path | None = None
     log_file: Path | None = Path("shop-notify.log")
     log_level: str = "INFO"
 
@@ -44,6 +39,23 @@ class Settings(BaseSettings):
     @classmethod
     def _normalize_console(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
+
+    @property
+    def has_notify_targets(self) -> bool:
+        return self.notify_config is not None or self.notify_urls is not None
+
+
+class Settings(NotifySettings):
+    """All settings for watching a shop."""
+
+    etsy_api_key: SecretStr
+    etsy_shared_secret: SecretStr
+    etsy_api_endpoint: str = "https://openapi.etsy.com/v3/application/"
+    etsy_shop_id: int | None = None
+
+    poll_interval: int = Field(default=300, ge=10)
+    db_path: Path = Path("shop-notify.db")
+    heartbeat_file: Path | None = None
 
     @model_validator(mode="after")
     def _require_shop(self) -> Self:

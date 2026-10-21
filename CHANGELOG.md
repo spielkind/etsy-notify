@@ -8,6 +8,15 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+### Added
+- `shop-notify test-notify` sends a sample notification to all configured
+  targets and reports the result per target; works without Etsy credentials,
+  `--url` tests a single Apprise URL (#9)
+
+### Changed
+- Notifications are sent to each target separately; the warning for partial
+  failures names the failed targets
+
 ## [1.0.0-rc.1] - 2026-10-21
 
 Complete rewrite of the original 2019 tool as **Shop Notify**. Release candidate

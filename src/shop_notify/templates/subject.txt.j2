@@ -1,4 +1,5 @@
 {% set count = listings | length %}
+{% if test %}[Test] {% endif %}
 {% if initial %}
 First run: {{ count }} item{{ "s" if count != 1 }} currently in {{ shop_name or "the shop" }} (recorded, not notified)
 {% else %}

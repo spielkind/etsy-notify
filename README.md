@@ -125,10 +125,28 @@ For a single target, `NOTIFY_URLS` is enough, e.g. `NOTIFY_URLS="ntfys://ntfy.sh
 - If all targets fail, the items stay *new* and are sent again with the next poll. If only some fail, a warning is logged.
 - `notify.yml` and `.env` contain passwords – both are ignored by git and never copied into the Docker image.
 
+### Testing notifications
+Send a sample notification with two example items to all configured targets – no Etsy key needed, the database is not touched:
+
+```sh
+uv run shop-notify test-notify                                   # local
+docker compose run --rm shop-notify test-notify                  # Docker
+cd /opt/shop-notify && sudo -u shop-notify .venv/bin/shop-notify test-notify   # systemd
+```
+
+```text
+  ✓ mailtos://you:****@gmail.com/
+  ✗ ntfys://ntfy.sh/your-topic
+
+1 of 2 target(s) succeeded.
+```
+
+The subject starts with `[Test]`. Use `--url` to try a single Apprise URL before adding it to the configuration, e.g. `shop-notify test-notify --url "ntfys://ntfy.sh/your-topic"`. The exit code is `0` if all targets succeeded, `1` if any failed and `2` for configuration errors.
+
 ### Message templates
 E-mails are sent as HTML with the item's main image, title, price and date; all other services get the compact plain-text version shown above.
 
-To customise them, copy any of the [built-in templates](src/shop_notify/templates/) (`subject.txt.j2`, `body.txt.j2`, `body.html.j2`) into a directory and set `NOTIFY_TEMPLATE_DIR` to it – files you don't copy keep their default. Templates use [Jinja2](https://jinja.palletsprojects.com/templates/); the variables are `listings` (with `title`, `url`, `price`, `image_url`, `last_modified`), `shop_name` and `initial` (true for the [first run](#first-run)), and the `localtime` filter formats a date. Values are HTML-escaped automatically in `*.html.j2`.
+To customise them, copy any of the [built-in templates](src/shop_notify/templates/) (`subject.txt.j2`, `body.txt.j2`, `body.html.j2`) into a directory and set `NOTIFY_TEMPLATE_DIR` to it – files you don't copy keep their default. Templates use [Jinja2](https://jinja.palletsprojects.com/templates/); the variables are `listings` (with `title`, `url`, `price`, `image_url`, `last_modified`), `shop_name`, `initial` (true for the [first run](#first-run)) and `test` (true for [test notifications](#testing-notifications)), and the `localtime` filter formats a date. Values are HTML-escaped automatically in `*.html.j2`.
 
 ## Creating an Etsy app
 Shop Notify only reads public listings, so it needs an API key but no OAuth login.
