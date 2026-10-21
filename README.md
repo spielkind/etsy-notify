@@ -209,6 +209,9 @@ uv run pytest
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, pull requests and releases. Planned features are on the [roadmap](https://github.com/spielkind/shop-notify/issues?q=is%3Aopen+label%3Aroadmap); security issues please report as described in [SECURITY.md](SECURITY.md).
 
+- [Architecture](docs/architecture.md) and [security model](docs/security.md)
+- [Governance](GOVERNANCE.md) and [Code of Conduct](CODE_OF_CONDUCT.md)
+
 ## License and disclaimer
 [MIT](LICENSE).
 
