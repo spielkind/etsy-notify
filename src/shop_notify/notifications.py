@@ -32,6 +32,21 @@ class NotificationError(Exception):
 
 
 @dataclass(frozen=True)
+class Delivery:
+    """Result of sending a notification to one target."""
+
+    target: str
+    ok: bool
+
+
+@dataclass(frozen=True)
+class _Target:
+    name: str
+    apprise: apprise.Apprise
+    html: bool
+
+
+@dataclass(frozen=True)
 class Message:
     subject: str
     text: str
@@ -123,6 +138,7 @@ class MultiNotifier:
 class AppriseNotifier:
     """Sends notifications to any service supported by Apprise.
 
+    Every target is notified separately, so failures can be reported per target.
     E-mail targets get the HTML message, all other services the plain text one.
     """
 
@@ -134,60 +150,55 @@ class AppriseNotifier:
         renderer: MessageRenderer | None = None,
     ) -> None:
         self._renderer = renderer or MessageRenderer()
-        targets = apprise.Apprise()
+        services = apprise.Apprise()
         if config is not None:
             if not config.is_file():
                 raise ValueError(f"notification config {config} does not exist")
             apprise_config = apprise.AppriseConfig()
             apprise_config.add(str(config))
-            targets.add(apprise_config)
-        if urls and not targets.add(urls):
+            services.add(apprise_config)
+        if urls and not services.add(urls):
             raise ValueError("NOTIFY_URLS contains an invalid notification URL")
-        if len(targets) == 0:
+        if len(services) == 0:
             raise ValueError("no valid notification targets configured")
 
-        self._services = list(targets)
-        self._html_targets = apprise.Apprise()
-        self._text_targets = apprise.Apprise()
-        for service in self._services:
-            group = self._html_targets if isinstance(service, NotifyEmail) else self._text_targets
-            group.add(service)
+        self._targets: list[_Target] = []
+        for service in services:
+            single = apprise.Apprise()
+            single.add(service)
+            name = service.url(privacy=True).split("?", 1)[0]  # type: ignore[no-untyped-call]
+            self._targets.append(_Target(name, single, html=isinstance(service, NotifyEmail)))
 
     @property
     def targets(self) -> list[str]:
         """Configured targets with credentials masked, safe for logging."""
-        return [
-            service.url(privacy=True).split("?", 1)[0]  # type: ignore[no-untyped-call]
-            for service in self._services
-        ]
+        return [target.name for target in self._targets]
+
+    def send(self, message: Message) -> list[Delivery]:
+        """Send a rendered message to every target and report the result per target."""
+        deliveries = []
+        for target in self._targets:
+            result = target.apprise.notify(
+                title=message.subject,
+                body=message.html if target.html else message.text,
+                body_format=apprise.NotifyFormat.HTML if target.html else apprise.NotifyFormat.TEXT,
+            )
+            deliveries.append(Delivery(target.name, ok=bool(result)))
+        return deliveries
 
     def notify(self, listings: Sequence[Listing], *, initial: bool = False) -> None:
         if not listings or initial:
             return
-        message = self._renderer.render(listings)
-        results = []
-        if len(self._html_targets):
-            results.append(
-                self._html_targets.notify(
-                    title=message.subject,
-                    body=message.html,
-                    body_format=apprise.NotifyFormat.HTML,
-                )
-            )
-        if len(self._text_targets):
-            results.append(
-                self._text_targets.notify(
-                    title=message.subject,
-                    body=message.text,
-                    body_format=apprise.NotifyFormat.TEXT,
-                )
-            )
-
-        succeeded = sum(r.success_count for r in results)
-        failed = sum(r.failed_count + r.timeout_count for r in results)
-        if not succeeded:
-            raise NotificationError(f"Sending notifications failed: {results}")
+        deliveries = self.send(self._renderer.render(listings))
+        failed = [d.target for d in deliveries if not d.ok]
+        if len(failed) == len(deliveries):
+            raise NotificationError(f"Sending notifications failed for all targets: {failed}")
         if failed:
-            log.warning("%d of %d notification targets failed", failed, failed + succeeded)
+            log.warning(
+                "%d of %d notification targets failed: %s",
+                len(failed),
+                len(deliveries),
+                ", ".join(failed),
+            )
         else:
-            log.info("Notified %d target(s)", succeeded)
+            log.info("Notified %d target(s)", len(deliveries))

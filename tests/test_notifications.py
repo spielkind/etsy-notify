@@ -168,7 +168,19 @@ def test_apprise_notifier_partial_failure_is_tolerated(
     AppriseNotifier(urls="shoptest://ok, shoptest://fail").notify([make_listing(1)])
 
     assert len(sent) == 2
-    assert "1 of 2 notification targets failed" in caplog.text
+    assert "1 of 2 notification targets failed: shoptest://" in caplog.text
+
+
+def test_apprise_notifier_send_reports_per_target(sent: list[dict[str, Any]]) -> None:
+    notifier = AppriseNotifier(urls="shoptest://ok, shoptest://fail")
+
+    deliveries = notifier.send(MessageRenderer().render([make_listing(1)]))
+
+    assert sorted((d.target, d.ok) for d in deliveries) == [
+        ("shoptest://", False),
+        ("shoptest://", True),
+    ]
+    assert {s["meta"]["host"] for s in sent} == {"ok", "fail"}
 
 
 def test_apprise_notifier_total_failure_raises(sent: list[dict[str, Any]]) -> None:
