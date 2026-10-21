@@ -35,10 +35,11 @@ The project must be able to continue within a week if a maintainer becomes unava
   commit on `main`, which only changes through pull requests with passing checks.
   Releases are built and published entirely by GitHub Actions – no personal credentials
   or local build machines are needed.
-- [@Tomalak](https://github.com/Tomalak) is the designated
-  [successor](https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-access-to-your-personal-repositories/maintaining-ownership-continuity-of-your-personal-accounts-repositories)
-  of the owner's account and can take over ownership of the repository (including its
-  settings and the container images) if the owner can no longer act.
+- Repository settings (rulesets, collaborators) are managed by the owner; they are not
+  needed to continue the project. If the owner becomes permanently unavailable, the
+  project continues as a fork under [@Tomalak](https://github.com/Tomalak), announced in
+  an issue here and in the fork's README. Code, documentation and the release
+  automation are part of the repository and work in a fork the same way.
 - All project knowledge lives in the repository: documentation, CI/CD workflows,
   release process ([CONTRIBUTING.md](CONTRIBUTING.md#releasing)) and this document.
 
