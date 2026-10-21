@@ -69,5 +69,8 @@ jobs:
         run: |
           flags=()
           if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+          # Releases are immutable once published: create a draft with all files
+          # attached first, then publish it
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
             --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}" dist/*
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

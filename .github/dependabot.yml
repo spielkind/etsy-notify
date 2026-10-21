@@ -11,6 +11,9 @@ updates:
     groups:
       python:
         update-types: [minor, patch]
+      python-security:
+        applies-to: security-updates
+        patterns: ["*"]
     commit-message:
       prefix: build
     labels: [dependencies]
@@ -23,6 +26,9 @@ updates:
       default-days: 7
     groups:
       actions:
+        patterns: ["*"]
+      actions-security:
+        applies-to: security-updates
         patterns: ["*"]
     commit-message:
       prefix: ci
