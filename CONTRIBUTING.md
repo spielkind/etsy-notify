@@ -41,6 +41,15 @@ Apprise service (see `tests/conftest.py`).
 CI must pass before merging: lint (ruff, mypy, actionlint, zizmor), tests on all supported
 Python versions, dependency audit and the Docker build for amd64 and arm64.
 
+## Dependency updates
+
+Dependabot proposes grouped updates (weekly for Python packages and actions, monthly for
+pre-commit hooks) after a cooldown of 7 days. Patch and minor updates are merged
+automatically once all required checks pass; major updates need a manual review. Merges
+don't create a release – they are shipped with the next one (use a patch release for
+urgent security fixes). Note that merges done by the auto-merge workflow don't trigger
+further workflows, so the `main` image is rebuilt with the next regular push.
+
 ## Releasing
 
 Changes are listed in [`CHANGELOG.md`](CHANGELOG.md) under *Unreleased*. To publish a release:
