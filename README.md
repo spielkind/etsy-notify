@@ -295,7 +295,7 @@ That's intended if the item was gone from the shop in between (sold, deactivated
 <details>
 <summary>Can I watch several shops?</summary>
 
-Not yet with a single instance – run one instance per shop with its own `.env` and `DB_PATH`. Keep the shared API quota in mind.
+Not yet with a single instance ([planned](https://github.com/spielkind/shop-notify/issues/7)) – run one instance per shop with its own `.env` and `DB_PATH`. Keep the shared API quota in mind.
 </details>
 
 <details>

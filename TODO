@@ -1,2 +1,0 @@
-- versioning: uv version --bump + git tags vX.Y.Z, CHANGELOG
-- multiple shops
