@@ -8,6 +8,10 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+## [1.0.0-rc.3] - 2026-10-21
+
+First release verified against the real Etsy API (#6).
+
 ### Added
 - Push and chat services (ntfy, Telegram, …) get one message per new item
   with its picture; e-mail stays one HTML message with all items.
@@ -87,6 +91,7 @@ until it has been verified against the real Etsy API with an approved key.
 
 Original version for the Etsy API v2 (never tagged).
 
-[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.2...HEAD
+[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.3...HEAD
+[1.0.0-rc.3]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/spielkind/shop-notify/releases/tag/v1.0.0-rc.1
