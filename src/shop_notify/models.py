@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError, field_validator
 
 
 class Money(BaseModel):
@@ -26,6 +26,17 @@ class Listing(BaseModel):
     last_modified_timestamp: int
     price: Money | None = None
     image_url: str | None = None
+
+    @field_validator("price", mode="before")
+    @classmethod
+    def _ignore_invalid_price(cls, value: object) -> object:
+        """A missing or malformed price must not make the whole listing unusable."""
+        if value is None or isinstance(value, Money):
+            return value
+        try:
+            return Money.model_validate(value)
+        except ValidationError:
+            return None
 
     @property
     def last_modified(self) -> datetime:

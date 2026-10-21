@@ -14,6 +14,8 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
   `--url` tests a single Apprise URL (#9)
 
 ### Fixed
+- A single malformed listing in an Etsy response no longer fails the whole
+  poll: it is skipped with a warning; a malformed price is ignored
 - Docker image: install time zone data so that `TZ` (e.g. `Europe/Berlin`)
   applies to dates in notifications and logs
 

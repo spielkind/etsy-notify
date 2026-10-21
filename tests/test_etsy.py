@@ -197,6 +197,61 @@ def test_quota_is_read_from_response_headers() -> None:
 
 
 @respx.mock
+def test_malformed_listings_are_skipped(caplog: pytest.LogCaptureFixture) -> None:
+    broken_price = {**_listing(2), "price": {"amount": "lots"}}
+    no_divisor = {**_listing(3), "price": {"amount": 500, "divisor": 0, "currency_code": "EUR"}}
+    no_title = {k: v for k, v in _listing(4).items() if k != "title"}
+    route = respx.get(f"{BASE}shops/42/listings/active").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"count": 6, "results": [_listing(1), broken_price, no_title]},
+            ),
+            httpx.Response(200, json={"count": 6, "results": [no_divisor, {"oops": 1}, {}]}),
+        ]
+    )
+    with EtsyClient("key", "secret", base_url=BASE) as client:
+        listings = list(client.active_listings(42))
+
+    assert [item.listing_id for item in listings] == [1, 2, 3]
+    assert listings[1].price is None
+    assert str(listings[2].price) == "500.00 EUR"
+    assert route.call_count == 2
+    assert route.calls[1].request.url.params["offset"] == "3"
+    assert "Skipping malformed entry 4 from the Etsy API: title: Field required" in caplog.text
+    assert "Skipping malformed entry without listing_id" in caplog.text
+
+
+@respx.mock
+def test_warns_if_no_listing_on_a_page_can_be_read(caplog: pytest.LogCaptureFixture) -> None:
+    respx.get(f"{BASE}shops/42/listings/active").mock(
+        return_value=httpx.Response(200, json={"count": 2, "results": [{"a": 1}, {"b": 2}]})
+    )
+    with EtsyClient("key", "secret", base_url=BASE) as client:
+        assert list(client.active_listings(42)) == []
+
+    assert "None of the 2 listings on this page could be read" in caplog.text
+
+
+@respx.mock
+def test_malformed_image_entries_are_skipped() -> None:
+    respx.get(f"{BASE}listings/batch").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "count": 2,
+                "results": [
+                    {"listing_id": 1, "images": [{"rank": 1}]},
+                    {"listing_id": 2, "images": [{"rank": 1, "url_570xN": "https://img/2.jpg"}]},
+                ],
+            },
+        )
+    )
+    with EtsyClient("key", "secret", base_url=BASE) as client:
+        assert client.listing_images([1, 2]) == {2: "https://img/2.jpg"}
+
+
+@respx.mock
 def test_http_error_raises_etsy_error() -> None:
     respx.get(f"{BASE}shops/42/listings/active").mock(return_value=httpx.Response(403))
     with EtsyClient("key", "secret", base_url=BASE) as client, pytest.raises(EtsyError):

@@ -4,10 +4,10 @@ import time
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Self
+from typing import Any, Self
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from shop_notify.models import Listing
 
@@ -21,9 +21,11 @@ class EtsyError(Exception):
     """Raised when the Etsy API cannot be queried successfully."""
 
 
-class _ListingsPage(BaseModel):
-    count: int
-    results: list[Listing]
+class _RawPage(BaseModel):
+    """A page of results that are validated one by one."""
+
+    count: int = 0
+    results: list[dict[str, Any]]
 
 
 class _Shop(BaseModel):
@@ -44,10 +46,6 @@ class _ListingImage(BaseModel):
 class _ListingWithImages(BaseModel):
     listing_id: int
     images: list[_ListingImage] | None = None
-
-
-class _ListingsWithImagesPage(BaseModel):
-    results: list[_ListingWithImages]
 
 
 @dataclass(frozen=True)
@@ -149,11 +147,8 @@ class EtsyClient:
                 "listings/batch",
                 {"listing_ids": ",".join(map(str, chunk)), "includes": "Images"},
             )
-            try:
-                page = _ListingsWithImagesPage.model_validate_json(response.content)
-            except ValueError as e:
-                raise EtsyError(f"Invalid response from Etsy API: {e}") from e
-            for listing in page.results:
+            page = _parse_page(response)
+            for listing in _validate_each(_ListingWithImages, page.results):
                 if listing.images:
                     main = min(listing.images, key=lambda image: image.rank)
                     images[listing.listing_id] = main.url_570xN
@@ -172,12 +167,15 @@ class EtsyClient:
                     "offset": offset,
                 },
             )
-            try:
-                page = _ListingsPage.model_validate_json(response.content)
-            except ValueError as e:
-                raise EtsyError(f"Invalid response from Etsy API: {e}") from e
-
-            yield from page.results
+            page = _parse_page(response)
+            listings = _validate_each(Listing, page.results)
+            if page.results and not listings:
+                log.warning(
+                    "None of the %d listings on this page could be read - "
+                    "has the Etsy API changed?",
+                    len(page.results),
+                )
+            yield from listings
             offset += len(page.results)
             if not page.results or offset >= page.count:
                 return
@@ -189,3 +187,25 @@ def _retry_after(response: httpx.Response, default: float) -> float:
     except KeyError, ValueError:
         delay = default
     return min(max(delay, 0.0), MAX_RETRY_AFTER)
+
+
+def _parse_page(response: httpx.Response) -> _RawPage:
+    try:
+        return _RawPage.model_validate_json(response.content)
+    except ValueError as e:
+        raise EtsyError(f"Invalid response from Etsy API: {e}") from e
+
+
+def _validate_each[M: BaseModel](model: type[M], items: list[dict[str, Any]]) -> list[M]:
+    """Validate items individually; skip (and log) the ones that don't fit."""
+    valid = []
+    for item in items:
+        try:
+            valid.append(model.model_validate(item))
+        except ValidationError as e:
+            log.warning(
+                "Skipping malformed entry %s from the Etsy API: %s",
+                item.get("listing_id", "without listing_id"),
+                "; ".join(f"{'.'.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors()),
+            )
+    return valid
