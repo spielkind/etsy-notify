@@ -8,6 +8,9 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+### Changed
+- `compose.yaml`: container is named `shop-notify` (was `shop-notify-shop-notify-1`)
+
 ## [1.0.0-rc.3] - 2026-10-21
 
 First release verified against the real Etsy API (#6).
