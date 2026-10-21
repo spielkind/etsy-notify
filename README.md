@@ -5,14 +5,14 @@
 | Name                              |    Stmts |     Miss |   Branch |   BrPart |    Cover |   Missing |
 |---------------------------------- | -------: | -------: | -------: | -------: | -------: | --------: |
 | src/shop\_notify/\_\_init\_\_.py  |        2 |        0 |        0 |        0 |     100% |           |
-| src/shop\_notify/\_\_main\_\_.py  |      191 |        0 |       44 |        0 |     100% |           |
-| src/shop\_notify/config.py        |       47 |        0 |        2 |        0 |     100% |           |
+| src/shop\_notify/\_\_main\_\_.py  |      195 |        0 |       44 |        0 |     100% |           |
+| src/shop\_notify/config.py        |       50 |        0 |        2 |        0 |     100% |           |
 | src/shop\_notify/db.py            |       29 |        0 |        0 |        0 |     100% |           |
 | src/shop\_notify/etsy.py          |      112 |        0 |       20 |        0 |     100% |           |
 | src/shop\_notify/models.py        |       24 |        0 |        2 |        0 |     100% |           |
-| src/shop\_notify/notifications.py |      125 |        0 |       36 |        0 |     100% |           |
+| src/shop\_notify/notifications.py |      169 |        0 |       54 |        0 |     100% |           |
 | src/shop\_notify/systemd.py       |       37 |        0 |        6 |        0 |     100% |           |
-| **TOTAL**                         |  **567** |    **0** |  **110** |    **0** | **100%** |           |
+| **TOTAL**                         |  **618** |    **0** |  **128** |    **0** | **100%** |           |
 
 
 ## Setup coverage badge
