@@ -45,7 +45,11 @@ def setup_logging(settings: Settings) -> None:
 def build_notifier(settings: Settings) -> Notifier:
     notifiers: list[Notifier] = []
     try:
-        renderer = MessageRenderer(settings.notify_template_dir, shop_name=settings.etsy_shop_name)
+        renderer = MessageRenderer(
+            settings.notify_template_dir,
+            shop_name=settings.etsy_shop_name,
+            language=settings.notify_language,
+        )
         if settings.notify_config is not None or settings.notify_urls is not None:
             urls = settings.notify_urls.get_secret_value() if settings.notify_urls else None
             notifiers.append(
@@ -230,12 +234,22 @@ SAMPLE_IMAGE_URL = (
 PROJECT_URL = "https://github.com/spielkind/shop-notify"
 
 
-def sample_listings() -> list[Listing]:
+SAMPLE_TITLES = {
+    "en": ('Sample: hand-thrown mug "Morning dew"', "Sample: small vase in sage green (no image)"),
+    "de": (
+        "Muster: handgedrehte Tasse „Morgentau“",
+        "Muster: kleine Vase in Salbeigrün (ohne Bild)",
+    ),
+}
+
+
+def sample_listings(language: str = "en") -> list[Listing]:
     now = int(time.time())
+    first, second = SAMPLE_TITLES.get(language, SAMPLE_TITLES["en"])
     return [
         Listing(
             listing_id=1,
-            title='Sample: hand-thrown mug "Morning dew"',
+            title=first,
             url=PROJECT_URL,
             last_modified_timestamp=now,
             price=Money(amount=2450, divisor=100, currency_code="EUR"),
@@ -243,7 +257,7 @@ def sample_listings() -> list[Listing]:
         ),
         Listing(
             listing_id=2,
-            title="Sample: small vase in sage green (no image)",
+            title=second,
             url=PROJECT_URL,
             last_modified_timestamp=now,
             price=Money(amount=1800, divisor=100, currency_code="EUR"),
@@ -253,7 +267,11 @@ def sample_listings() -> list[Listing]:
 
 def build_test_senders(settings: NotifySettings, url: str | None) -> tuple[list[Sender], Message]:
     """Targets of a test notification: ``url`` only, or all configured ones."""
-    renderer = MessageRenderer(settings.notify_template_dir, shop_name=settings.etsy_shop_name)
+    renderer = MessageRenderer(
+        settings.notify_template_dir,
+        shop_name=settings.etsy_shop_name,
+        language=settings.notify_language,
+    )
     senders: list[Sender] = []
     if url:
         senders.append(AppriseNotifier(urls=url, renderer=renderer))
@@ -268,7 +286,7 @@ def build_test_senders(settings: NotifySettings, url: str | None) -> tuple[list[
             senders.insert(0, ConsoleNotifier(renderer))
     if not senders:
         raise ValueError("no notification targets configured (NOTIFY_CONSOLE=false)")
-    return senders, renderer.render(sample_listings(), test=True)
+    return senders, renderer.render(sample_listings(renderer.language), test=True)
 
 
 def test_notify(settings: NotifySettings, url: str | None = None) -> int:

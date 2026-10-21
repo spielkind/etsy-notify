@@ -24,6 +24,8 @@ class NotifySettings(BaseSettings):
     notify_existing_on_first_run: bool = False
     # Directory with custom subject.txt.j2 / body.txt.j2 / body.html.j2 templates
     notify_template_dir: Path | None = None
+    # Language of the built-in templates
+    notify_language: Literal["en", "de"] = "en"
 
     @field_validator("log_file", "notify_config", "notify_template_dir", mode="before")
     @classmethod

@@ -9,7 +9,7 @@ import apprise
 import jinja2
 from apprise.plugins.email import NotifyEmail
 
-from shop_notify.models import Listing
+from shop_notify.models import Listing, Money
 
 log = logging.getLogger(__name__)
 
@@ -59,24 +59,50 @@ class Message:
     html: str
 
 
-def _localtime(value: datetime) -> str:
-    return f"{value.astimezone():%d.%m.%Y %H:%M}"
+LANGUAGES = ("en", "de")
+CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
+
+
+def format_datetime(value: datetime, language: str) -> str:
+    local = value.astimezone()
+    if language == "de":
+        return f"{local:%d.%m.%Y, %H:%M} Uhr"
+    return f"{local:%b} {local.day}, {local:%Y, %H:%M}"
+
+
+def format_money(value: Money, language: str) -> str:
+    symbol = CURRENCY_SYMBOLS.get(value.currency_code)
+    number = f"{value.value:,.2f}"
+    if language == "de":
+        number = number.replace(",", "_").replace(".", ",").replace("_", ".")
+        return f"{number} {symbol or value.currency_code}"
+    return f"{symbol}{number}" if symbol else f"{number} {value.currency_code}"
 
 
 class MessageRenderer:
     """Renders notification messages from Jinja2 templates.
 
-    Templates in ``template_dir`` override the built-in ones of the same name.
+    Templates in ``template_dir`` override the built-in ones of the same name; the
+    built-in templates exist per language, with English as fallback.
     HTML templates (``*.html.j2``) are auto-escaped.
     """
 
-    def __init__(self, template_dir: Path | None = None, shop_name: str | None = None) -> None:
+    def __init__(
+        self,
+        template_dir: Path | None = None,
+        shop_name: str | None = None,
+        language: str = "en",
+    ) -> None:
+        if language not in LANGUAGES:
+            raise ValueError(f"unsupported language {language!r}, use one of {LANGUAGES}")
+        self.language = language
         loaders: list[jinja2.BaseLoader] = []
         if template_dir is not None:
             if not template_dir.is_dir():
                 raise ValueError(f"template directory {template_dir} does not exist")
             loaders.append(jinja2.FileSystemLoader(template_dir))
-        loaders.append(jinja2.PackageLoader("shop_notify", "templates"))
+        for lang in dict.fromkeys((language, "en")):
+            loaders.append(jinja2.PackageLoader("shop_notify", f"templates/{lang}"))
         self._env = jinja2.Environment(
             loader=jinja2.ChoiceLoader(loaders),
             autoescape=lambda name: name is not None and name.endswith(".html.j2"),
@@ -84,7 +110,8 @@ class MessageRenderer:
             trim_blocks=True,
             lstrip_blocks=True,
         )
-        self._env.filters["localtime"] = _localtime
+        self._env.filters["localtime"] = lambda value: format_datetime(value, language)
+        self._env.filters["money"] = lambda value: format_money(value, language)
         self._shop_name = shop_name
         try:
             for name in TEMPLATE_NAMES:

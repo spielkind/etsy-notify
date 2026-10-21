@@ -12,6 +12,8 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 - `shop-notify test-notify` sends a sample notification to all configured
   targets and reports the result per target; works without Etsy credentials,
   `--url` tests a single Apprise URL (#9)
+- German notification messages with `NOTIFY_LANGUAGE=de`; dates and prices
+  are formatted per language, new template filter `money` (#11)
 
 ### Fixed
 - A single malformed listing in an Etsy response no longer fails the whole
@@ -20,6 +22,9 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
   applies to dates in notifications and logs
 
 ### Changed
+- English messages now use English date and price formats
+  (`Oct 14, 2026, 19:46`, `€24.50`); built-in templates moved to
+  `templates/<language>/`
 - Notifications are sent to each target separately; the warning for partial
   failures names the failed targets
 

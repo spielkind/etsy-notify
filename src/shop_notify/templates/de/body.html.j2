@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -25,19 +25,19 @@
         <a href="{{ item.url }}" style="font-size:17px;font-weight:700;color:#264653;text-decoration:none;">{{ item.title }}</a>
         <div style="margin-top:6px;font-size:14px;color:#6B4E45;">
 {% if item.price %}
-          <strong style="color:#D1495B;">{{ item.price }}</strong> &middot;
+          <strong style="color:#D1495B;">{{ item.price | money }}</strong> &middot;
 {% endif %}
           {{ item.last_modified | localtime }}
         </div>
         <div style="margin-top:12px;">
-          <a href="{{ item.url }}" style="display:inline-block;padding:8px 16px;background:#2A9D8F;color:#FFFFFF;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">View item</a>
+          <a href="{{ item.url }}" style="display:inline-block;padding:8px 16px;background:#2A9D8F;color:#FFFFFF;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">Ansehen</a>
         </div>
       </td></tr>
     </table>
   </td></tr>
 {% endfor %}
   <tr><td style="padding:8px 0 0 0;font-size:12px;color:#9C8A83;text-align:center;">
-    Sent by Shop Notify
+    Gesendet von Shop Notify
   </td></tr>
 </table>
 </td></tr>

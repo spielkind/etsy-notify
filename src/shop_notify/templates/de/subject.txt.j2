@@ -1,0 +1,7 @@
+{% set count = listings | length %}
+{% if test %}[Test] {% endif %}
+{% if initial %}
+Erster Lauf: {{ count }} Artikel aktuell in {{ shop_name or "dem Shop" }} (gespeichert, nicht gemeldet)
+{% else %}
+{{ count }} neue{{ "r" if count == 1 }} Artikel in {{ shop_name or "dem Shop" }}
+{% endif %}

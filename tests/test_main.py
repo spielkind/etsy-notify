@@ -593,3 +593,22 @@ def test_url_only_with_test_notify(capsys: pytest.CaptureFixture[str]) -> None:
         cli.main(["healthcheck", "--url", "shoptest://x"])
     assert exc.value.code == 2
     assert "--url can only be used with test-notify" in capsys.readouterr().err
+
+
+def test_test_notify_in_german(
+    monkeypatch: pytest.MonkeyPatch,
+    sent: list[dict[str, object]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("NOTIFY_URLS", "shoptest://ok")
+    monkeypatch.setenv("NOTIFY_LANGUAGE", "de")
+
+    assert cli.test_notify(NotifySettings()) == 0
+    assert sent[0]["title"] == "[Test] 2 neue Artikel in dem Shop"
+    assert "Muster: handgedrehte Tasse" in str(sent[0]["body"])
+
+
+def test_invalid_language_setting(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NOTIFY_LANGUAGE", "fr")
+    with pytest.raises(ValueError, match="notify_language"):
+        NotifySettings()

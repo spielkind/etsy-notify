@@ -1,6 +1,6 @@
 {% for item in listings %}
 {{ item.title }}
-{% if item.price %}{{ item.price }} · {% endif %}{{ item.last_modified | localtime }}
+{% if item.price %}{{ item.price | money }} · {% endif %}{{ item.last_modified | localtime }}
 {{ item.url }}
 {% if not loop.last %}
 

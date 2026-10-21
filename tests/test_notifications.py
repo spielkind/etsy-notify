@@ -1,4 +1,5 @@
 import email
+from datetime import UTC, datetime
 from email.message import Message as EmailMessage
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,8 @@ from shop_notify.notifications import (
     ConsoleNotifier,
     MessageRenderer,
     NotificationError,
+    format_datetime,
+    format_money,
 )
 from tests.helpers import make_listing
 
@@ -39,17 +42,17 @@ def test_render_subject_with_shop_name() -> None:
 def test_render_text_body() -> None:
     message = MessageRenderer().render([_rich_listing(1), make_listing(2, "Vase")])
 
-    assert message.text.startswith("Tasse 1\n12.50 EUR · ")
+    assert message.text.startswith("Tasse 1\n€12.50 · ")
     assert "https://www.etsy.com/listing/1" in message.text
     assert "\n\nVase 2\n" in message.text
-    assert "EUR" not in message.text.split("Vase 2")[1]
+    assert "€" not in message.text.split("Vase 2")[1]
 
 
 def test_render_html_body() -> None:
     html = MessageRenderer().render([_rich_listing(1), make_listing(2, "Vase")]).html
 
     assert '<img src="https://i.etsystatic.com/1.jpg"' in html
-    assert "12.50 EUR" in html
+    assert "€12.50" in html
     assert 'href="https://www.etsy.com/listing/2"' in html
     assert html.count("<img") == 1
 
@@ -206,3 +209,65 @@ def test_apprise_notifier_rejects_empty_config_file(tmp_path: Path) -> None:
     config.write_text("version: 1\nurls: []\n")
     with pytest.raises(ValueError, match="no valid notification targets"):
         AppriseNotifier(config=config)
+
+
+# --- languages ---------------------------------------------------------------
+
+
+def test_german_subjects() -> None:
+    renderer = MessageRenderer(shop_name="mabgraves", language="de")
+    one, two = [make_listing(1)], [make_listing(1), make_listing(2)]
+
+    assert renderer.render(one).subject == "1 neuer Artikel in mabgraves"
+    assert renderer.render(two).subject == "2 neue Artikel in mabgraves"
+    assert renderer.render(two, test=True).subject == "[Test] 2 neue Artikel in mabgraves"
+    assert renderer.render(two, initial=True).subject == (
+        "Erster Lauf: 2 Artikel aktuell in mabgraves (gespeichert, nicht gemeldet)"
+    )
+    assert MessageRenderer(language="de").render(one).subject == "1 neuer Artikel in dem Shop"
+
+
+def test_german_bodies() -> None:
+    message = MessageRenderer(language="de").render([_rich_listing(1)])
+
+    assert "12,50 €" in message.text
+    assert " Uhr\n" in message.text
+    assert '<html lang="de">' in message.html
+    assert ">Ansehen<" in message.html
+    assert "Gesendet von Shop Notify" in message.html
+
+
+@pytest.mark.parametrize(
+    ("language", "money", "expected"),
+    [
+        ("en", Money(amount=123456, divisor=100, currency_code="EUR"), "€1,234.56"),
+        ("en", Money(amount=1800, divisor=100, currency_code="USD"), "$18.00"),
+        ("en", Money(amount=990, divisor=100, currency_code="CHF"), "9.90 CHF"),
+        ("de", Money(amount=123456, divisor=100, currency_code="EUR"), "1.234,56 €"),
+        ("de", Money(amount=990, divisor=100, currency_code="CHF"), "9,90 CHF"),
+    ],
+)
+def test_format_money(language: str, money: Money, expected: str) -> None:
+    assert format_money(money, language) == expected
+
+
+def test_format_datetime() -> None:
+    value = datetime(2026, 10, 4, 7, 5, tzinfo=UTC).astimezone()
+    local = value.astimezone()
+
+    assert format_datetime(value, "en") == f"Oct {local.day}, 2026, {local:%H:%M}"
+    assert format_datetime(value, "de") == f"{local:%d}.10.2026, {local:%H:%M} Uhr"
+
+
+def test_unknown_language_is_rejected() -> None:
+    with pytest.raises(ValueError, match="unsupported language"):
+        MessageRenderer(language="fr")
+
+
+def test_custom_template_overrides_language_template(tmp_path: Path) -> None:
+    (tmp_path / "subject.txt.j2").write_text("Eigener Betreff")
+
+    message = MessageRenderer(tmp_path, language="de").render([_rich_listing(1)])
+
+    assert message.subject == "Eigener Betreff"
+    assert "12,50 €" in message.text

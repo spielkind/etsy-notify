@@ -47,11 +47,11 @@ A notification on your phone (plain text) looks like this – e-mails additional
 2 new items in YourShop
 
 Hand-thrown mug "Morning dew"
-24.50 EUR · 14.10.2026 19:46
+€24.50 · Oct 14, 2026, 19:46
 https://www.etsy.com/listing/1234567890
 
 Small vase in sage green
-18.00 EUR · 14.10.2026 20:46
+€18.00 · Oct 14, 2026, 20:46
 https://www.etsy.com/listing/1234567891
 ```
 
@@ -84,6 +84,7 @@ All settings are read from `.env` in the working directory or from environment v
 | `NOTIFY_URLS` | – | One or more Apprise URLs, short form for simple setups |
 | `NOTIFY_CONSOLE` | `auto` | Print notifications to stdout: `auto` only if no other targets are configured (plus the [first run](#first-run)), `true` always (in addition to them), `false` never |
 | `NOTIFY_EXISTING_ON_FIRST_RUN` | `false` | Send the items already in the shop on the [first run](#first-run) to all targets |
+| `NOTIFY_LANGUAGE` | `en` | Language of the built-in messages: `en` or `de` |
 | `NOTIFY_TEMPLATE_DIR` | – | Directory with [custom message templates](#message-templates) |
 | `DB_PATH` | `shop-notify.db` | SQLite database of seen items |
 | `HEARTBEAT_FILE` | next to `DB_PATH` | Touched after every successful poll, used by the [health check](#health-check) |
@@ -147,7 +148,9 @@ The subject starts with `[Test]`. Use `--url` to try a single Apprise URL before
 ### Message templates
 E-mails are sent as HTML with the item's main image, title, price and date; all other services get the compact plain-text version shown above.
 
-To customise them, copy any of the [built-in templates](src/shop_notify/templates/) (`subject.txt.j2`, `body.txt.j2`, `body.html.j2`) into a directory and set `NOTIFY_TEMPLATE_DIR` to it – files you don't copy keep their default. Templates use [Jinja2](https://jinja.palletsprojects.com/templates/); the variables are `listings` (with `title`, `url`, `price`, `image_url`, `last_modified`), `shop_name`, `initial` (true for the [first run](#first-run)) and `test` (true for [test notifications](#testing-notifications)), and the `localtime` filter formats a date. Values are HTML-escaped automatically in `*.html.j2`.
+The built-in messages are available in English and German (`NOTIFY_LANGUAGE=de`); dates and prices are formatted accordingly, e.g. `Oct 14, 2026, 19:46` / `€24.50` or `14.10.2026, 19:46 Uhr` / `24,50 €`.
+
+To customise them, copy any of the [built-in templates](src/shop_notify/templates/) (`subject.txt.j2`, `body.txt.j2`, `body.html.j2` from the folder of your language) into a directory and set `NOTIFY_TEMPLATE_DIR` to it – files you don't copy keep their default. Templates use [Jinja2](https://jinja.palletsprojects.com/templates/); the variables are `listings` (with `title`, `url`, `price`, `image_url`, `last_modified`), `shop_name`, `initial` (true for the [first run](#first-run)) and `test` (true for [test notifications](#testing-notifications)), and the filters `localtime` and `money` format dates and prices in the configured language. Values are HTML-escaped automatically in `*.html.j2`.
 
 ## Creating an Etsy app
 Shop Notify only reads public listings, so it needs an API key but no OAuth login.
