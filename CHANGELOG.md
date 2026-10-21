@@ -15,6 +15,8 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 ### Security
 - Weekly scheduled scan of the released image and rebuild of `main`;
   old commit images are cleaned up automatically
+- Medium-severity vulnerabilities are reported as well (critical and high
+  still fail the build)
 - The Docker image is scanned for vulnerabilities (Trivy); pip was removed
   from the runtime image as its vendored libraries were outdated
 - Base images are pinned by digest

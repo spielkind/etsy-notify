@@ -13,15 +13,21 @@ report=$2
   fi
   count=$(jq '[.Results[]?.Vulnerabilities[]?] | length' "$report")
   if [[ "$count" == 0 ]]; then
-    echo "No fixable CRITICAL/HIGH vulnerabilities found ✓"
+    echo "No fixable CRITICAL/HIGH/MEDIUM vulnerabilities found ✓"
   else
-    echo "**$count fixable CRITICAL/HIGH vulnerabilities:**"
+    jq -r '[.Results[]?.Vulnerabilities[]?.Severity]
+      | "**\(length) fixable vulnerabilities:** "
+        + ([("CRITICAL", "HIGH", "MEDIUM") as $s
+            | (map(select(. == $s)) | length) as $n
+            | select($n > 0) | "\($n) \($s | ascii_downcase)"] | join(", "))' "$report"
     echo
     echo "| Severity | Package | Installed | Fixed | ID |"
     echo "|---|---|---|---|---|"
-    jq -r '.Results[]?.Vulnerabilities[]?
-      | "| \(.Severity) | \(.PkgName) | \(.InstalledVersion) | \(.FixedVersion) | [\(.VulnerabilityID)](\(.PrimaryURL // "")) |"' "$report"
+    jq -r '[.Results[]?.Vulnerabilities[]?]
+      | sort_by({"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2}[.Severity] // 3)[]
+      | "| \(.Severity) | \(.PkgName) | \(.InstalledVersion) | \(.FixedVersion) | \(if .PrimaryURL then "[\(.VulnerabilityID)](\(.PrimaryURL))" else .VulnerabilityID end) |"' "$report"
     echo
+    echo "Critical and high findings fail builds of pull requests, main and releases."
     echo "Details: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/security/code-scanning"
   fi
 } >> "$GITHUB_STEP_SUMMARY"

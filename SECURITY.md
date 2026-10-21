@@ -16,7 +16,9 @@ systemd, locally) and steps to reproduce.
 ## Vulnerability scanning
 
 - Every Docker build (pull requests, `main`, releases) is scanned with
-  [Trivy](https://trivy.dev); fixable critical or high vulnerabilities fail the build.
+  [Trivy](https://trivy.dev). Fixable critical, high and medium vulnerabilities are
+  reported; critical and high ones fail the build. Vulnerabilities without a fix and
+  low ones are not reported.
 - Every Monday the released image (`latest`) is scanned again and `main` is rebuilt
   and scanned, so that newly published vulnerabilities show up even without changes
   to the repository. These scheduled scans don't fail; findings appear under
