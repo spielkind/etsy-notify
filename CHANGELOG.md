@@ -8,6 +8,17 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-21
+
+### Added
+- Published on [PyPI](https://pypi.org/project/shop-notify/):
+  `uv tool install shop-notify` or `pipx install shop-notify`, with trusted
+  publishing and signed attestations
+- Package metadata (project links, classifiers, keywords)
+
+### Changed
+- README links and images are absolute, so they also work on PyPI
+
 ## [1.0.0] - 2026-10-21
 
 First stable release: verified against the real Etsy API – a new listing in a
@@ -134,7 +145,8 @@ until it has been verified against the real Etsy API with an approved key.
 
 Original version for the Etsy API v2 (never tagged).
 
-[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/spielkind/shop-notify/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.4...v1.0.0
 [1.0.0-rc.4]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.2...v1.0.0-rc.3

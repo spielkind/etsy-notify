@@ -35,6 +35,10 @@ jobs:
         run: uv run typos
       - name: zizmor
         run: uv run zizmor --format=github .github
+      - name: Package metadata (as checked by PyPI)
+        run: |
+          uv build --out-dir "$RUNNER_TEMP/dist"
+          uv run twine check --strict "$RUNNER_TEMP"/dist/*
         env:
           GH_TOKEN: ${{ github.token }}
 

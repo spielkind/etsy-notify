@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg">
-  <img alt="Shop Notify – get notified when new items appear in a shop" src="docs/banner-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/spielkind/shop-notify/main/docs/banner-dark.svg">
+  <img alt="Shop Notify – get notified when new items appear in a shop" src="https://raw.githubusercontent.com/spielkind/shop-notify/main/docs/banner-light.svg">
 </picture>
 
 # Shop Notify
@@ -9,6 +9,7 @@
 [![Docker](https://github.com/spielkind/shop-notify/actions/workflows/docker.yml/badge.svg)](https://github.com/spielkind/shop-notify/actions/workflows/docker.yml)
 [![Coverage](https://raw.githubusercontent.com/spielkind/shop-notify/python-coverage-comment-action-data/badge.svg)](https://github.com/spielkind/shop-notify/tree/python-coverage-comment-action-data)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/spielkind/shop-notify/badge)](https://scorecard.dev/viewer/?uri=github.com/spielkind/shop-notify)
+[![PyPI](https://img.shields.io/pypi/v/shop-notify)](https://pypi.org/project/shop-notify/)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15766/badge)](https://www.bestpractices.dev/projects/15766)
 
 Shop Notify watches an Etsy shop and tells you – and anyone else you like – as soon as new items appear. Perfect for one-of-a-kind pieces that sell out quickly.
@@ -20,15 +21,15 @@ Shop Notify watches an Etsy shop and tells you – and anyone else you like – 
 ## How it works
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/how-it-works-dark.svg">
-  <img alt="Shop Notify polls the Etsy Open API, compares the active listings with its SQLite database and sends new items via Apprise to e-mail, push and chat services." src="docs/how-it-works-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/spielkind/shop-notify/main/docs/how-it-works-dark.svg">
+  <img alt="Shop Notify polls the Etsy Open API, compares the active listings with its SQLite database and sends new items via Apprise to e-mail, push and chat services." src="https://raw.githubusercontent.com/spielkind/shop-notify/main/docs/how-it-works-light.svg">
 </picture>
 
 Every few minutes Shop Notify fetches the active listings of the shop from the [Etsy Open API v3](https://developers.etsy.com/documentation/) and compares them with the items it has already seen. Each new item is notified exactly once:
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/lifecycle-dark.svg">
-  <img alt="Lifecycle of a listing: New, then Notified once sent, then Forgotten when it disappears from the shop; if it re-appears it is New again. Failed notifications are retried with the next poll." src="docs/lifecycle-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/spielkind/shop-notify/main/docs/lifecycle-dark.svg">
+  <img alt="Lifecycle of a listing: New, then Notified once sent, then Forgotten when it disappears from the shop; if it re-appears it is New again. Failed notifications are retried with the next poll." src="https://raw.githubusercontent.com/spielkind/shop-notify/main/docs/lifecycle-light.svg">
 </picture>
 
 ### First run
@@ -59,8 +60,8 @@ https://www.etsy.com/listing/1234567891
 
 ## Quick start
 
-1. **Get an Etsy API key** – see [Creating an Etsy app](docs/etsy-app.md). You need the *keystring* and the *shared secret*.
-2. **Configure:** download [`compose.yaml`](compose.yaml) and [`.env.example`](.env.example), save the latter as `.env` and fill in your key, secret and the shop name (as in `etsy.com/shop/<name>`).
+1. **Get an Etsy API key** – see [Creating an Etsy app](https://github.com/spielkind/shop-notify/blob/main/docs/etsy-app.md). You need the *keystring* and the *shared secret*.
+2. **Configure:** download [`compose.yaml`](https://github.com/spielkind/shop-notify/blob/main/compose.yaml) and [`.env.example`](https://github.com/spielkind/shop-notify/blob/main/.env.example), save the latter as `.env` and fill in your key, secret and the shop name (as in `etsy.com/shop/<name>`).
 3. **Start:**
 
    ```sh
@@ -69,7 +70,7 @@ https://www.etsy.com/listing/1234567891
    docker compose logs -f
    ```
 
-Without notification targets, new items are only written to the log – a good first test. Then [set up notifications](docs/notifications.md).
+Without notification targets, new items are only written to the log – a good first test. Then [set up notifications](https://github.com/spielkind/shop-notify/blob/main/docs/notifications.md).
 
 ## Configuration
 
@@ -90,7 +91,7 @@ All settings are read from `.env` in the working directory or from environment v
 | `NOTIFY_IMAGES` | `true` | Push/chat services get one message per new item with its picture |
 | `NOTIFY_IMAGES_MAX` | `5` | Up to this many new items per poll are sent individually; above, one summary message |
 | `NOTIFY_IMAGES_IN_SUMMARY` | `false` | Attach up to 10 pictures to the summary message (a Telegram album with `?album=yes`) |
-| `NOTIFY_TEMPLATE_DIR` | – | Directory with [custom message templates](docs/notifications.md#message-templates) |
+| `NOTIFY_TEMPLATE_DIR` | – | Directory with [custom message templates](https://github.com/spielkind/shop-notify/blob/main/docs/notifications.md#message-templates) |
 | `DB_PATH` | `shop-notify.db` | SQLite database of seen items |
 | `HEARTBEAT_FILE` | next to `DB_PATH` | Touched after every successful poll, used by the [health check](#health-check) |
 | `LOG_FILE` | `shop-notify.log` | Log file; empty to log to stdout only |
@@ -112,7 +113,7 @@ A new Etsy app may make **5,000 requests per day**. Every poll needs one request
 The default of 5 minutes needs fewer than 300 requests per day for a typical shop. Shop Notify logs a warning when less than 20 % of the daily quota is left, and waits as long as Etsy asks when it answers `429 Too Many Requests`.
 
 ### Notifications
-Notifications are sent with [Apprise](https://github.com/caronc/apprise) – e-mail, ntfy, Telegram, Signal and [100+ more](https://github.com/caronc/apprise/wiki). Copy [`notify.example.yml`](notify.example.yml) to `notify.yml`, adjust it and set `NOTIFY_CONFIG=notify.yml`:
+Notifications are sent with [Apprise](https://github.com/caronc/apprise) – e-mail, ntfy, Telegram, Signal and [100+ more](https://github.com/caronc/apprise/wiki). Copy [`notify.example.yml`](https://github.com/spielkind/shop-notify/blob/main/notify.example.yml) to `notify.yml`, adjust it and set `NOTIFY_CONFIG=notify.yml`:
 
 ```yaml
 version: 1
@@ -126,15 +127,15 @@ urls:
 
 E-mail gets one HTML message with all new items; push and chat services get one message per item with its picture. Try your setup with `shop-notify test-notify` – no Etsy key needed.
 
-**→ [Notifications in detail](docs/notifications.md):** setting up Gmail, ntfy and Telegram, pictures and summaries, testing, custom templates and languages.
+**→ [Notifications in detail](https://github.com/spielkind/shop-notify/blob/main/docs/notifications.md):** setting up Gmail, ntfy and Telegram, pictures and summaries, testing, custom templates and languages.
 
 ## Creating an Etsy app
-Shop Notify only reads public listings, so it needs an API key (keystring and shared secret) but no OAuth login. New apps start as *Pending Personal Approval*; until they are **Active**, every request fails with `403`. **→ [Step-by-step registration](docs/etsy-app.md)**
+Shop Notify only reads public listings, so it needs an API key (keystring and shared secret) but no OAuth login. New apps start as *Pending Personal Approval*; until they are **Active**, every request fails with `403`. **→ [Step-by-step registration](https://github.com/spielkind/shop-notify/blob/main/docs/etsy-app.md)**
 
 ## Running
 
 ### Docker
-Images for `linux/amd64` and `linux/arm64` (Raspberry Pi with a 64-bit OS) are published as `ghcr.io/spielkind/shop-notify` (`latest` = newest release). With [`compose.yaml`](compose.yaml) and your `.env`:
+Images for `linux/amd64` and `linux/arm64` (Raspberry Pi with a 64-bit OS) are published as `ghcr.io/spielkind/shop-notify` (`latest` = newest release). With [`compose.yaml`](https://github.com/spielkind/shop-notify/blob/main/compose.yaml) and your `.env`:
 
 ```sh
 mkdir -p data
@@ -143,19 +144,21 @@ docker compose up -d
 docker compose logs -f
 ```
 
-To use `notify.yml`, uncomment its volume in `compose.yaml` and set `NOTIFY_CONFIG=/config/notify.yml`; set `TZ=Europe/Berlin` (or your time zone) as the container runs in UTC otherwise. **→ [Docker in detail](docs/docker.md):** image tags, updates, moving an existing database, verifying the image, troubleshooting.
+To use `notify.yml`, uncomment its volume in `compose.yaml` and set `NOTIFY_CONFIG=/config/notify.yml`; set `TZ=Europe/Berlin` (or your time zone) as the container runs in UTC otherwise. **→ [Docker in detail](https://github.com/spielkind/shop-notify/blob/main/docs/docker.md):** image tags, updates, moving an existing database, verifying the image, troubleshooting.
 
 ### systemd
-Alternatively install it as a sandboxed systemd service, e.g. on Raspberry Pi OS; `systemctl status` then shows the result of the last poll. **→ [systemd setup](docs/systemd.md)**
+Alternatively install it as a sandboxed systemd service, e.g. on Raspberry Pi OS; `systemctl status` then shows the result of the last poll. **→ [systemd setup](https://github.com/spielkind/shop-notify/blob/main/docs/systemd.md)**
 
 ### Locally
-Requires [uv](https://docs.astral.sh/uv/) (it downloads Python 3.14+ if needed):
+Install it from [PyPI](https://pypi.org/project/shop-notify/) with [uv](https://docs.astral.sh/uv/) (it downloads Python 3.14+ if needed) or [pipx](https://pipx.pypa.io/):
 
 ```sh
-uv sync
-cp .env.example .env   # and fill it in
-uv run shop-notify
+uv tool install shop-notify    # or: pipx install shop-notify
+# create .env in the current directory (see .env.example) and fill it in
+shop-notify
 ```
+
+Update with `uv tool upgrade shop-notify`. To run it from a clone of the repository instead: `uv sync`, then `uv run shop-notify`.
 
 Stop it with `Ctrl+C`.
 
@@ -163,7 +166,7 @@ Stop it with `Ctrl+C`.
 After every successful poll Shop Notify touches a heartbeat file. `shop-notify healthcheck` exits with `0` if the last successful poll is younger than `2 × POLL_INTERVAL + 60 s`, otherwise with `1` – e.g. when Etsy rejects the API key or the network is down. Docker uses it for its health status; manually:
 
 ```sh
-uv run shop-notify healthcheck                       # local
+shop-notify healthcheck                              # local
 docker compose exec shop-notify shop-notify healthcheck   # Docker
 ```
 
@@ -207,12 +210,12 @@ uv run pre-commit install
 uv run pytest
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, pull requests and releases. Planned features are on the [roadmap](https://github.com/spielkind/shop-notify/issues?q=is%3Aopen+label%3Aroadmap); security issues please report as described in [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](https://github.com/spielkind/shop-notify/blob/main/CONTRIBUTING.md) for the development workflow, pull requests and releases. Planned features are on the [roadmap](https://github.com/spielkind/shop-notify/issues?q=is%3Aopen+label%3Aroadmap); security issues please report as described in [SECURITY.md](https://github.com/spielkind/shop-notify/blob/main/SECURITY.md).
 
-- [Architecture](docs/architecture.md) and [security model](docs/security.md)
-- [Governance](GOVERNANCE.md) and [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Architecture](https://github.com/spielkind/shop-notify/blob/main/docs/architecture.md) and [security model](https://github.com/spielkind/shop-notify/blob/main/docs/security.md)
+- [Governance](https://github.com/spielkind/shop-notify/blob/main/GOVERNANCE.md) and [Code of Conduct](https://github.com/spielkind/shop-notify/blob/main/CODE_OF_CONDUCT.md)
 
 ## License and disclaimer
-[MIT](LICENSE).
+[MIT](https://github.com/spielkind/shop-notify/blob/main/LICENSE).
 
 The term "Etsy" is a trademark of Etsy, Inc. This application uses the Etsy API but is not endorsed or certified by Etsy, Inc.
