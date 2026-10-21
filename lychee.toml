@@ -1,0 +1,26 @@
+# lychee link checker configuration – https://lychee.cli.rs
+# Checked weekly and for pull requests that change documentation.
+
+# Accept rate limiting and "forbidden" from sites that block automated requests
+accept = ["200..=299", "403", "429"]
+max_retries = 3
+timeout = 30
+# Anchors (#section) are not checked
+include_fragments = false
+
+exclude = [
+  # Examples and placeholders, not real URLs
+  '^https://www\.etsy\.com/listing/123456789',
+  '^https://openapi\.etsy\.com/v3/application/shops\?shop_name=SHOPNAME',
+  '^https://api\.telegram\.org/bot',
+  '^https://t\.me/<',
+  '^https?://(localhost|127\.0\.0\.1|example\.(com|org))',
+  # Pages that require a login or only exist for maintainers
+  '^https://github\.com/spielkind/shop-notify/security/',
+  '^https://github\.com/spielkind/shop-notify/settings',
+  '^https://www\.etsy\.com/developers/your-apps',
+  # Comparison link to the not yet released state
+  '/compare/v[^/]+\.\.\.HEAD$',
+]
+
+exclude_path = ["tests", "src"]
