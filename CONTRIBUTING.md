@@ -76,6 +76,7 @@ The tag triggers the release workflow (checks that it matches the package versio
 creates a GitHub release from the changelog section – a pre-release for `-rc`/`-beta`
 versions) and publishes the Docker images `X.Y.Z`, `X.Y` and `latest`. The release gets the
 wheel, the source archive and a CycloneDX SBOM attached, all with a signed build provenance
-attestation (`gh attestation verify <file> --owner spielkind`). Releases are immutable on GitHub:
+attestation (`gh attestation verify <file> --owner spielkind`); the Sigstore bundle of the
+attestation is attached as `shop-notify-<version>.sigstore.json` for offline verification. Releases are immutable on GitHub:
 once published, their tag and files can't be changed – fixes always need a new version. Release tags are
 protected and cannot be moved or deleted.
