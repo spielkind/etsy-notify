@@ -5,6 +5,7 @@ GET  /v3/application/shops/<id>/listings/active   → current listings, newest f
 GET  /v3/application/listings/batch               → main image per listing
 GET  /image.png                                   → sample image
 POST /_add                                        → publish one more listing
+POST /_hide_once                                  → leave out the oldest listing once
 
 Run with: python fake_etsy.py PORT
 """
@@ -22,6 +23,7 @@ IMAGE = Path(__file__).resolve().parents[2] / "docs" / "sample-item.png"
 
 listings: list[dict[str, object]] = []
 port = 0
+state = {"hide_once": False}
 
 
 def add_listing() -> dict[str, object]:
@@ -31,6 +33,7 @@ def add_listing() -> dict[str, object]:
         "title": f"Handmade test item {number}",
         "url": f"https://www.etsy.com/listing/{1000 + number}/test-item",
         "last_modified_timestamp": int(time.time()),
+        "state_timestamp": int(time.time()),
         "price": {"amount": 1250 + number, "divisor": 100, "currency_code": "EUR"},
         "image_url": f"http://localhost:{port}/image.png",
     }
@@ -64,13 +67,16 @@ class Handler(BaseHTTPRequestHandler):
             shops = [{"shop_id": SHOP_ID, "shop_name": SHOP_NAME}] if found else []
             self._json({"count": len(shops), "results": shops})
         elif url.path == f"/v3/application/shops/{SHOP_ID}/listings/active":
+            # like a gap in Etsy's listing index: the listing is missing everywhere
+            visible = listings[:-1] if state["hide_once"] else listings
+            state["hide_once"] = False
             offset = int(query.get("offset", ["0"])[0])
             limit = int(query.get("limit", ["100"])[0])
             page = [
                 {k: v for k, v in item.items() if k != "image_url"}
-                for item in listings[offset : offset + limit]
+                for item in visible[offset : offset + limit]
             ]
-            self._json({"count": len(listings), "results": page})
+            self._json({"count": len(visible), "results": page})
         elif url.path == "/v3/application/listings/batch":
             ids = {int(i) for i in query["listing_ids"][0].split(",")}
             results = [
@@ -88,6 +94,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path == "/_add":
             self._json(add_listing())
+        elif self.path == "/_hide_once":
+            state["hide_once"] = True
+            self._json({})
         else:
             self.send_error(404)
 

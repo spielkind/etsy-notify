@@ -8,6 +8,20 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-21
+
+### Fixed
+- An item that was briefly missing from Etsy's response (gaps in Etsy's
+  listing index, or items moving between pages while paginating) was
+  forgotten and notified again as new. Notified items are now only
+  forgotten after they have been gone for `FORGET_AFTER_HOURS` (default 24),
+  and never after an incomplete response.
+- Notifications show when the item went online instead of when it was last
+  modified
+
+### Added
+- `FORGET_AFTER_HOURS` setting; forgotten items are logged
+
 ## [1.0.1] - 2026-10-21
 
 ### Added
@@ -145,7 +159,8 @@ until it has been verified against the real Etsy API with an approved key.
 
 Original version for the Etsy API v2 (never tagged).
 
-[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/spielkind/shop-notify/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/spielkind/shop-notify/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.4...v1.0.0
 [1.0.0-rc.4]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.3...v1.0.0-rc.4

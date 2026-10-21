@@ -139,6 +139,7 @@ def run_once(
     shop_id: int,
     *,
     notify_existing: bool = False,
+    forget_after_hours: float = 24,
 ) -> int:
     """Poll once and notify new items; returns the number of notified items.
 
@@ -151,6 +152,9 @@ def run_once(
 
     first_run = store.is_empty()
     new_items = store.sync(listings)
+    if client.listings_complete:
+        for item in store.forget(forget_after_hours * 3600):
+            log.info("No longer in the shop, forgotten: %s (%s)", item.title, item.url)
     if new_items and first_run and not notify_existing:
         notifier.notify(new_items, initial=True)
         store.mark_as_notified(new_items)
@@ -236,6 +240,7 @@ def run(settings: Settings) -> None:
                         notifier,
                         shop_id,
                         notify_existing=settings.notify_existing_on_first_run,
+                        forget_after_hours=settings.forget_after_hours,
                     )
                     settings.heartbeat_path.touch()
                     systemd.status(f"Last poll {_now()}: {new} new item(s){_quota_status(client)}")

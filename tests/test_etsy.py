@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import httpx
@@ -5,6 +6,7 @@ import pytest
 import respx
 
 from shop_notify.etsy import EtsyClient, EtsyError, Quota
+from shop_notify.models import Listing
 
 BASE = "https://openapi.etsy.com/v3/application/"
 
@@ -263,3 +265,36 @@ def test_invalid_json_raises_etsy_error() -> None:
     respx.get(f"{BASE}shops/42/listings/active").mock(return_value=httpx.Response(200, text="nope"))
     with EtsyClient("key", "secret", base_url=BASE) as client, pytest.raises(EtsyError):
         list(client.active_listings(42))
+
+
+@respx.mock
+def test_active_listings_reports_incomplete_results(caplog: pytest.LogCaptureFixture) -> None:
+    route = respx.get(f"{BASE}shops/42/listings/active").mock(
+        side_effect=[
+            # the second page repeats an item that moved, so listing 2 is never seen
+            httpx.Response(200, json={"count": 3, "results": [_listing(1), _listing(3)]}),
+            httpx.Response(200, json={"count": 3, "results": [_listing(3)]}),
+        ]
+    )
+    with EtsyClient("key", "secret", base_url=BASE) as client:
+        assert client.listings_complete
+        list(client.active_listings(42))
+        assert not client.listings_complete
+
+        route.side_effect = [
+            httpx.Response(200, json={"count": 2, "results": [_listing(1), _listing(2)]})
+        ]
+        list(client.active_listings(42))
+        assert client.listings_complete
+
+    assert "Etsy returned 2 of 3 active listings" in caplog.text
+
+
+def test_listing_dates() -> None:
+    data = _listing(1) | {"last_modified_timestamp": 2_000, "state_timestamp": 1_000}
+    listing = Listing.model_validate(data)
+    assert listing.listed == datetime.fromtimestamp(1_000, tz=UTC)
+    assert listing.last_modified == datetime.fromtimestamp(2_000, tz=UTC)
+
+    stored_by_older_version = Listing.model_validate(_listing(1))
+    assert stored_by_older_version.listed == datetime.fromtimestamp(1_700_000_000, tz=UTC)

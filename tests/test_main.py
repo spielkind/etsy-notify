@@ -221,6 +221,88 @@ def test_run_once_notifies_without_images_if_loading_fails(
     store.close()
 
 
+def test_run_once_forgets_listings_missing_for_longer_than_configured(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO)
+    client = _client()
+    client.listings_complete = True
+    store = ListingStore(":memory:")
+    notifier = RecordingNotifier()
+    client.active_listings.return_value = [make_listing(1), make_listing(2)]
+    with patch("shop_notify.db.time.time", return_value=0):
+        cli.run_once(client, store, notifier, 42)
+
+    client.active_listings.return_value = [make_listing(2)]
+    with patch("shop_notify.db.time.time", return_value=3600):
+        cli.run_once(client, store, notifier, 42, forget_after_hours=1)
+    assert "forgotten" not in caplog.text
+    with patch("shop_notify.db.time.time", return_value=3601):
+        cli.run_once(client, store, notifier, 42, forget_after_hours=1)
+    assert "No longer in the shop, forgotten: Item 1 (https://www.etsy.com/listing/1)" in (
+        caplog.text
+    )
+
+    client.active_listings.return_value = [make_listing(1), make_listing(2)]
+    client.listing_images.return_value = {}
+    assert cli.run_once(client, store, notifier, 42, forget_after_hours=1) == 1
+    store.close()
+
+
+def test_run_once_does_not_forget_after_incomplete_fetch() -> None:
+    client = _client()
+    client.listings_complete = True
+    store = ListingStore(":memory:")
+    notifier = RecordingNotifier()
+    client.active_listings.return_value = [make_listing(1), make_listing(2)]
+    with patch("shop_notify.db.time.time", return_value=0):
+        cli.run_once(client, store, notifier, 42)
+
+    client.listings_complete = False
+    client.active_listings.return_value = [make_listing(2)]
+    with patch("shop_notify.db.time.time", return_value=10_000):
+        cli.run_once(client, store, notifier, 42, forget_after_hours=0)
+
+    client.listings_complete = True
+    client.active_listings.return_value = [make_listing(1), make_listing(2)]
+    assert cli.run_once(client, store, notifier, 42, forget_after_hours=0) == 0
+    assert notifier.calls == [[1, 2]]  # only the silent first run
+    store.close()
+
+
+@respx.mock
+def test_run_passes_settings_to_each_poll(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, restore_signals: None, restore_logging: None
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    for key, value in {
+        "ETSY_API_KEY": "key",
+        "ETSY_SHARED_SECRET": "secret",
+        "ETSY_SHOP_ID": "42",
+        "DB_PATH": str(tmp_path / "test.db"),
+        "LOG_FILE": "",
+        "NOTIFY_EXISTING_ON_FIRST_RUN": "true",
+        "FORGET_AFTER_HOURS": "2.5",
+    }.items():
+        monkeypatch.setenv(key, value)
+    route = respx.get(f"{BASE}shops/42/listings/active").mock(
+        return_value=httpx.Response(200, json={"count": 0, "results": []})
+    )
+    calls: list[dict[str, object]] = []
+
+    def fake_run_once(client: EtsyClient, *args: object, **kwargs: object) -> int:
+        list(client.active_listings(42))
+        calls.append(kwargs)
+        signal.raise_signal(signal.SIGTERM)
+        return 0
+
+    with patch.object(cli, "run_once", fake_run_once):
+        cli.main([])
+
+    assert calls == [{"notify_existing": True, "forget_after_hours": 2.5}]
+    assert route.calls[0].request.headers["x-api-key"] == "key:secret"
+
+
 def test_setup_logging_writes_file(tmp_path: Path, restore_logging: None) -> None:
     log_file = tmp_path / "shop-notify.log"
     cli.setup_logging(_settings(log_file=log_file, log_level="debug"))
