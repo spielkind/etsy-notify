@@ -64,5 +64,7 @@ git push --follow-tags
 
 The tag triggers the release workflow (checks that it matches the package version and
 creates a GitHub release from the changelog section – a pre-release for `-rc`/`-beta`
-versions) and publishes the Docker images `X.Y.Z`, `X.Y` and `latest`. Release tags are
+versions) and publishes the Docker images `X.Y.Z`, `X.Y` and `latest`. The release gets the
+wheel, the source archive and a CycloneDX SBOM attached, all with a signed build provenance
+attestation (`gh attestation verify <file> --owner spielkind`). Release tags are
 protected and cannot be moved or deleted.

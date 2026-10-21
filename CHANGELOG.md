@@ -8,6 +8,15 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+### Added
+- Releases include the wheel, the source archive and a CycloneDX SBOM with
+  signed build provenance
+
+### Security
+- The Docker image is scanned for vulnerabilities (Trivy); pip was removed
+  from the runtime image as its vendored libraries were outdated
+- Base images are pinned by digest
+
 ### Changed
 - `compose.yaml`: container is named `shop-notify` (was `shop-notify-shop-notify-1`)
 

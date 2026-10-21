@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the GitHub release
+      id-token: write # sign the build provenance attestation
+      attestations: write # store the attestation
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,6 +48,20 @@ jobs:
             exit 1
           fi
 
+      - name: Build distributions and SBOM
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          uv build --out-dir dist
+          uv export --frozen --no-dev --format cyclonedx1.5 \
+            --output-file "dist/shop-notify-${TAG#v}.cdx.json"
+          ls -l dist
+
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,4 +70,4 @@ jobs:
           flags=()
           if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
+            --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}" dist/*
