@@ -23,6 +23,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.15-slim-trixie
 
+# Time zone data, so that TZ (e.g. Europe/Berlin) applies to notifications and logs
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd --system --uid 1000 --home-dir /data --shell /usr/sbin/nologin app \
     && mkdir /data && chown app:app /data
 

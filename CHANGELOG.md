@@ -13,6 +13,10 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
   targets and reports the result per target; works without Etsy credentials,
   `--url` tests a single Apprise URL (#9)
 
+### Fixed
+- Docker image: install time zone data so that `TZ` (e.g. `Europe/Berlin`)
+  applies to dates in notifications and logs
+
 ### Changed
 - Notifications are sent to each target separately; the warning for partial
   failures names the failed targets

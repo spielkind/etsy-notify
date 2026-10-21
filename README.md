@@ -90,6 +90,7 @@ All settings are read from `.env` in the working directory or from environment v
 | `LOG_FILE` | `shop-notify.log` | Log file; empty to log to stdout only |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, … |
 | `ETSY_API_ENDPOINT` | Etsy Open API v3 | Only needed for testing |
+| `TZ` | UTC | Docker only: time zone for dates in notifications and logs, e.g. `Europe/Berlin` (locally and with systemd the system time zone is used) |
 
 Only listing ID, title, URL, price and modification time are stored locally; vanished listings are deleted once they were notified.
 
@@ -190,6 +191,7 @@ docker compose up -d
 ```
 
 - To use `notify.yml`, uncomment its volume in `compose.yaml` and set `NOTIFY_CONFIG=/config/notify.yml` in `.env`.
+- Set `TZ=Europe/Berlin` (or your time zone) in `.env` – the container runs in UTC otherwise.
 - Database and heartbeat live in `./data`. The container runs as UID 1000, so `data/` must be writable for that user – on a Raspberry Pi the default user already has UID 1000.
 - Logs: `docker compose logs -f` · Status: `docker compose ps` shows `healthy`/`unhealthy`
 - Update: `docker compose pull && docker compose up -d` · Build locally: `docker compose up -d --build`

@@ -60,6 +60,9 @@ jobs:
           out=$(docker run --rm -e ETSY_API_KEY=k -e ETSY_SHARED_SECRET=s -e ETSY_SHOP_ID=1 \
             shop-notify:ci healthcheck || true)
           grep -q "no heartbeat yet" <<<"$out"
+          tz=$(docker run --rm -e TZ=Europe/Berlin --entrypoint python shop-notify:ci \
+            -c "import time; print(time.strftime('%Z'))")
+          [[ "$tz" == CET || "$tz" == CEST ]] || { echo "TZ not applied: $tz"; exit 1; }
 
       - if: env.PUSH == 'true'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
