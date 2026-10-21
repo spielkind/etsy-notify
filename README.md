@@ -9,6 +9,7 @@
 [![Docker](https://github.com/spielkind/shop-notify/actions/workflows/docker.yml/badge.svg)](https://github.com/spielkind/shop-notify/actions/workflows/docker.yml)
 [![Coverage](https://raw.githubusercontent.com/spielkind/shop-notify/python-coverage-comment-action-data/badge.svg)](https://github.com/spielkind/shop-notify/tree/python-coverage-comment-action-data)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/spielkind/shop-notify/badge)](https://scorecard.dev/viewer/?uri=github.com/spielkind/shop-notify)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15766/badge)](https://www.bestpractices.dev/projects/15766)
 
 Shop Notify watches an Etsy shop and tells you – and anyone else you like – as soon as new items appear. Perfect for one-of-a-kind pieces that sell out quickly.
 
