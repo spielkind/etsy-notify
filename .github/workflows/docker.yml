@@ -70,6 +70,7 @@ jobs:
           docker run --rm --entrypoint python shop-notify:ci -c "import shop_notify.__main__"
           docker run --rm shop-notify:ci --help
           test "$(docker run --rm --entrypoint id shop-notify:ci -u)" = "1000"
+          test "$(docker run --rm --entrypoint id shop-notify:ci -g)" = "1000"
           out=$(docker run --rm -e ETSY_API_KEY=k -e ETSY_SHARED_SECRET=s -e ETSY_SHOP_ID=1 \
             shop-notify:ci healthcheck || true)
           grep -q "no heartbeat yet" <<<"$out"
