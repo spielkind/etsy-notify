@@ -32,7 +32,7 @@ The tests never use the network or your local `.env`: Etsy is mocked with
 Apprise service (see `tests/conftest.py`).
 
 `tests/e2e/run.sh` tests the Docker image end to end against a fake Etsy API and
-[Mailpit](https://mailpit.axllent.org) (needs Docker; runs in CI for every build):
+[Mailpit](https://mailpit.axllent.org) (needs Docker and jq; runs in CI for every build):
 
 ```sh
 docker build -t shop-notify:ci . && tests/e2e/run.sh

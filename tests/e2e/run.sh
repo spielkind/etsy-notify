@@ -6,7 +6,7 @@
 #   2. a new listing appears: exactly one HTML mail with title, price and image
 #   3. further polls: no duplicate mail
 #
-# Usage: tests/e2e/run.sh [IMAGE]   (default: shop-notify:ci; needs docker, curl, python3)
+# Usage: tests/e2e/run.sh [IMAGE]   (default: shop-notify:ci; needs docker, curl, jq, python3)
 set -euo pipefail
 
 IMAGE=${1:-shop-notify:ci}
@@ -23,6 +23,7 @@ cleanup() {
     docker logs shop-notify-e2e 2>&1 | tail -40 || true
   fi
   docker rm -f shop-notify-e2e mailpit-e2e >/dev/null 2>&1 || true
+  [[ -n "${MAIL:-}" ]] && rm -f "$MAIL"
   [[ -n "${ETSY_PID:-}" ]] && kill "$ETSY_PID" 2>/dev/null
   exit "$status"
 }
@@ -40,7 +41,12 @@ wait_for() {
   return 1
 }
 
-mail_count() { curl -sf "$MAILPIT_API/messages" | python3 -c 'import json,sys; print(json.load(sys.stdin)["total"])'; }
+mail_count() { curl -sf "$MAILPIT_API/messages" | jq -r .total; }
+one_mail() { [[ $(mail_count) == 1 ]]; }
+first_run_logged() { docker logs shop-notify-e2e 2>&1 | grep -q "First run: 3 existing item"; }
+
+# check_mail JQ_FILTER MESSAGE – the filter must be true for the received mail
+check_mail() { jq -e "$1" "$MAIL" >/dev/null || fail "$2"; }
 
 python3 "$DIR/fake_etsy.py" "$ETSY_PORT" &
 ETSY_PID=$!
@@ -58,26 +64,21 @@ docker run -d --name shop-notify-e2e --network host \
   "$IMAGE" >/dev/null
 
 echo "1. first run is silent"
-wait_for 60 sh -c 'docker logs shop-notify-e2e 2>&1 | grep -q "First run: 3 existing item"' \
-  || fail "first run not logged"
+wait_for 60 first_run_logged || fail "first run not logged"
 sleep 3
 [[ $(mail_count) == 0 ]] || fail "mail sent on the first run"
 
 echo "2. a new listing is notified once"
 curl -sf -X POST "http://localhost:$ETSY_PORT/_add" >/dev/null
-wait_for 60 sh -c "[ \"\$(curl -sf $MAILPIT_API/messages | grep -o '\"total\":[0-9]*')\" = '\"total\":1' ]" \
-  || fail "no mail for the new listing"
-id=$(curl -sf "$MAILPIT_API/messages" | python3 -c 'import json,sys; print(json.load(sys.stdin)["messages"][0]["ID"])')
-curl -sf "$MAILPIT_API/message/$id" | python3 -c '
-import json, sys
-m = json.load(sys.stdin)
-html = m["HTML"]
-print("   subject:", m["Subject"])
-assert "Handmade test item 4" in m["Subject"] + html, "title missing"
-assert "12.54" in html, "price missing"
-assert "image.png" in html or m.get("Inline") or m.get("Attachments"), "image missing"
-assert "Handmade test item 3" not in html, "old listing included"
-' || fail "unexpected mail content"
+wait_for 60 one_mail || fail "no mail for the new listing"
+id=$(curl -sf "$MAILPIT_API/messages" | jq -r '.messages[0].ID')
+MAIL=$(mktemp)
+curl -sf "$MAILPIT_API/message/$id" > "$MAIL"
+echo "   subject: $(jq -r .Subject "$MAIL")"
+check_mail '(.Subject + .HTML) | contains("Handmade test item 4")' "title missing"
+check_mail '.HTML | contains("12.54")' "price missing"
+check_mail '(.HTML | contains("image.png")) or ((.Inline // []) | length > 0) or ((.Attachments // []) | length > 0)' "image missing"
+check_mail '.HTML | contains("Handmade test item 3") | not' "old listing included"
 
 echo "3. no duplicate on the next polls"
 sleep 25
