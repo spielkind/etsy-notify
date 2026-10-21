@@ -7,6 +7,7 @@ import time
 from collections.abc import Sequence
 from datetime import datetime
 from types import FrameType
+from typing import TypedDict
 
 from shop_notify import __version__
 from shop_notify.config import NotifySettings, Settings
@@ -28,6 +29,12 @@ from shop_notify.systemd import SystemdNotifier
 log = logging.getLogger("shop_notify")
 
 
+class ImageOptions(TypedDict):
+    images: bool
+    images_max: int
+    images_in_summary: bool
+
+
 def setup_logging(settings: Settings) -> None:
     handlers: list[logging.Handler] = [logging.StreamHandler()]
     if settings.log_file:
@@ -45,6 +52,14 @@ def setup_logging(settings: Settings) -> None:
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
+def image_options(settings: NotifySettings) -> ImageOptions:
+    return {
+        "images": settings.notify_images,
+        "images_max": settings.notify_images_max,
+        "images_in_summary": settings.notify_images_in_summary,
+    }
+
+
 def build_notifier(settings: Settings) -> Notifier:
     notifiers: list[Notifier] = []
     try:
@@ -56,7 +71,12 @@ def build_notifier(settings: Settings) -> Notifier:
         if settings.notify_config is not None or settings.notify_urls is not None:
             urls = settings.notify_urls.get_secret_value() if settings.notify_urls else None
             notifiers.append(
-                AppriseNotifier(urls=urls, config=settings.notify_config, renderer=renderer)
+                AppriseNotifier(
+                    urls=urls,
+                    config=settings.notify_config,
+                    renderer=renderer,
+                    **image_options(settings),
+                )
             )
     except ValueError as e:
         raise SystemExit(f"Invalid notification configuration: {e}") from e
@@ -277,12 +297,17 @@ def build_test_senders(settings: NotifySettings, url: str | None) -> tuple[list[
     )
     senders: list[Sender] = []
     if url:
-        senders.append(AppriseNotifier(urls=url, renderer=renderer))
+        senders.append(AppriseNotifier(urls=url, renderer=renderer, **image_options(settings)))
     else:
         if settings.has_notify_targets:
             urls = settings.notify_urls.get_secret_value() if settings.notify_urls else None
             senders.append(
-                AppriseNotifier(urls=urls, config=settings.notify_config, renderer=renderer)
+                AppriseNotifier(
+                    urls=urls,
+                    config=settings.notify_config,
+                    renderer=renderer,
+                    **image_options(settings),
+                )
             )
         console = settings.notify_console
         if console is True or (console == "auto" and not senders):

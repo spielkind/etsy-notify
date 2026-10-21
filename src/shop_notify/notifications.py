@@ -13,7 +13,15 @@ from shop_notify.models import Listing, Money
 
 log = logging.getLogger(__name__)
 
-TEMPLATE_NAMES = ("subject.txt.j2", "body.txt.j2", "body.html.j2")
+TEMPLATE_NAMES = (
+    "subject.txt.j2",
+    "body.txt.j2",
+    "body.html.j2",
+    "item_subject.txt.j2",
+    "item_body.txt.j2",
+)
+# Telegram albums hold at most 10 photos
+MAX_SUMMARY_IMAGES = 10
 
 
 class Notifier(Protocol):
@@ -50,6 +58,16 @@ class _Target:
     name: str
     apprise: apprise.Apprise
     html: bool
+    attachments: bool
+
+
+@dataclass(frozen=True)
+class ItemMessage:
+    """Message about a single listing, sent with its image to push/chat services."""
+
+    subject: str
+    text: str
+    image_url: str | None
 
 
 @dataclass(frozen=True)
@@ -57,6 +75,7 @@ class Message:
     subject: str
     text: str
     html: str
+    items: tuple[ItemMessage, ...] = ()
 
 
 LANGUAGES = ("en", "de")
@@ -129,10 +148,21 @@ class MessageRenderer:
             "test": test,
         }
         subject = self._env.get_template("subject.txt.j2").render(context).strip()
+        items = tuple(
+            ItemMessage(
+                subject=self._env.get_template("item_subject.txt.j2")
+                .render(context, item=item)
+                .strip(),
+                text=self._env.get_template("item_body.txt.j2").render(context, item=item).strip(),
+                image_url=item.image_url,
+            )
+            for item in listings
+        )
         return Message(
             subject=subject,
             text=self._env.get_template("body.txt.j2").render(context).strip(),
             html=self._env.get_template("body.html.j2").render(context, subject=subject),
+            items=items,
         )
 
 
@@ -182,7 +212,9 @@ class AppriseNotifier:
     """Sends notifications to any service supported by Apprise.
 
     Every target is notified separately, so failures can be reported per target.
-    E-mail targets get the HTML message, all other services the plain text one.
+    E-mail targets get one HTML message with all items. Services that support
+    attachments (ntfy, Telegram, …) get one message per item with its image, up to
+    ``images_max`` items; above that, or for other services, one plain text message.
     """
 
     def __init__(
@@ -191,8 +223,14 @@ class AppriseNotifier:
         urls: str | None = None,
         config: Path | None = None,
         renderer: MessageRenderer | None = None,
+        images: bool = True,
+        images_max: int = 5,
+        images_in_summary: bool = False,
     ) -> None:
         self._renderer = renderer or MessageRenderer()
+        self._images = images
+        self._images_max = images_max
+        self._images_in_summary = images_in_summary
         services = apprise.Apprise()
         if config is not None:
             if not config.is_file():
@@ -210,7 +248,15 @@ class AppriseNotifier:
             single = apprise.Apprise()
             single.add(service)
             name = service.url(privacy=True).split("?", 1)[0]  # type: ignore[no-untyped-call]
-            self._targets.append(_Target(name, single, html=isinstance(service, NotifyEmail)))
+            is_email = isinstance(service, NotifyEmail)
+            self._targets.append(
+                _Target(
+                    name,
+                    single,
+                    html=is_email,
+                    attachments=not is_email and bool(service.attachment_support),
+                )
+            )
 
     @property
     def targets(self) -> list[str]:
@@ -219,15 +265,45 @@ class AppriseNotifier:
 
     def send(self, message: Message) -> list[Delivery]:
         """Send a rendered message to every target and report the result per target."""
+        images = _ImageCache()
+        per_item = self._images and 0 < len(message.items) <= self._images_max
         deliveries = []
         for target in self._targets:
-            result = target.apprise.notify(
-                title=message.subject,
-                body=message.html if target.html else message.text,
-                body_format=apprise.NotifyFormat.HTML if target.html else apprise.NotifyFormat.TEXT,
-            )
-            deliveries.append(Delivery(target.name, ok=bool(result)))
+            if target.html:
+                ok = self._notify(target, message.subject, message.html, html=True)
+            elif target.attachments and per_item:
+                results = [
+                    self._notify(target, item.subject, item.text, attach=images.get(item.image_url))
+                    for item in message.items
+                ]
+                ok = all(results)
+            else:
+                attach = None
+                if target.attachments and self._images and self._images_in_summary:
+                    attach = images.combined(
+                        [item.image_url for item in message.items], MAX_SUMMARY_IMAGES
+                    )
+                ok = self._notify(target, message.subject, message.text, attach=attach)
+            deliveries.append(Delivery(target.name, ok=ok))
         return deliveries
+
+    @staticmethod
+    def _notify(
+        target: _Target,
+        title: str,
+        body: str,
+        *,
+        html: bool = False,
+        attach: apprise.AppriseAttachment | None = None,
+    ) -> bool:
+        return bool(
+            target.apprise.notify(
+                title=title,
+                body=body,
+                body_format=apprise.NotifyFormat.HTML if html else apprise.NotifyFormat.TEXT,
+                attach=attach,
+            )
+        )
 
     def notify(self, listings: Sequence[Listing], *, initial: bool = False) -> None:
         if not listings or initial:
@@ -245,3 +321,33 @@ class AppriseNotifier:
             )
         else:
             log.info("Notified %d target(s)", len(deliveries))
+
+
+class _ImageCache:
+    """Loads each image once per notification; unavailable images are left out."""
+
+    def __init__(self) -> None:
+        self._cache: dict[str, apprise.AppriseAttachment | None] = {}
+
+    def get(self, url: str | None) -> apprise.AppriseAttachment | None:
+        if not url:
+            return None
+        if url not in self._cache:
+            attachment = apprise.AppriseAttachment(url)
+            # Accessing the attachment downloads it; send without image if that fails
+            if attachment and all(attachment):
+                self._cache[url] = attachment
+            else:
+                log.warning("Could not load image %s, sending without it", url)
+                self._cache[url] = None
+        return self._cache[url]
+
+    def combined(self, urls: Sequence[str | None], limit: int) -> apprise.AppriseAttachment | None:
+        combined = apprise.AppriseAttachment()
+        for url in urls:
+            if len(combined) >= limit:
+                break
+            attachment = self.get(url)
+            if attachment is not None:
+                combined.add(list(attachment))
+        return combined if len(combined) else None

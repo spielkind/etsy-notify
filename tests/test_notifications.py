@@ -16,6 +16,7 @@ from shop_notify.notifications import (
     format_datetime,
     format_money,
 )
+from tests.conftest import SAMPLE_IMAGE
 from tests.helpers import make_listing
 
 
@@ -96,7 +97,7 @@ def test_console_notifier(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_apprise_notifier_sends_text_to_non_email_targets(sent: list[dict[str, Any]]) -> None:
-    notifier = AppriseNotifier(urls="shoptest://one, shoptest://two")
+    notifier = AppriseNotifier(urls="shoptest://one, shoptest://two", images=False)
 
     notifier.notify([make_listing(1), make_listing(2)])
 
@@ -104,6 +105,97 @@ def test_apprise_notifier_sends_text_to_non_email_targets(sent: list[dict[str, A
     assert sent[0]["title"] == "2 new items in the shop"
     assert "https://www.etsy.com/listing/2" in sent[0]["body"]
     assert "<html" not in sent[0]["body"]
+    assert sent[0]["attach"] == []
+
+
+# --- images ------------------------------------------------------------------
+
+
+def _with_image(listing_id: int, image: Path | str | None = SAMPLE_IMAGE) -> Listing:
+    return make_listing(listing_id).model_copy(update={"image_url": str(image) if image else None})
+
+
+def test_one_message_per_item_with_image(sent: list[dict[str, Any]]) -> None:
+    notifier = AppriseNotifier(urls="shoptest://push")
+
+    notifier.notify([_with_image(1), _with_image(2, image=None)])
+
+    assert [s["title"] for s in sent] == ["New in the shop: Item 1", "New in the shop: Item 2"]
+    assert sent[0]["body"] == f"Item 1\n{sent[0]['body'].splitlines()[1]}\n" + (
+        "https://www.etsy.com/listing/1"
+    )
+    assert sent[0]["attach"] == ["sample-item.png"]
+    assert sent[1]["attach"] == []
+
+
+def test_email_still_gets_one_html_message(sent: list[dict[str, Any]]) -> None:
+    notifier = AppriseNotifier(urls="mailtos://me:pw@gmail.com, shoptest://push")
+    with patch("smtplib.SMTP") as smtp:
+        smtp.return_value.sendmail.return_value = {}
+        notifier.notify([_with_image(1), _with_image(2)])
+
+    smtp.return_value.sendmail.assert_called_once()
+    assert len(sent) == 2
+
+
+def test_unavailable_image_is_left_out(
+    sent: list[dict[str, Any]], tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    AppriseNotifier(urls="shoptest://push").notify([_with_image(1, tmp_path / "missing.jpg")])
+
+    assert len(sent) == 1
+    assert sent[0]["attach"] == []
+    assert "Could not load image" in caplog.text
+
+
+def test_summary_above_images_max(sent: list[dict[str, Any]]) -> None:
+    notifier = AppriseNotifier(urls="shoptest://push", images_max=2)
+
+    notifier.notify([_with_image(1), _with_image(2), _with_image(3)])
+
+    assert len(sent) == 1
+    assert sent[0]["title"] == "3 new items in the shop"
+    assert sent[0]["attach"] == []
+
+
+def test_summary_with_images(sent: list[dict[str, Any]], tmp_path: Path) -> None:
+    images = []
+    for n in range(12):
+        image = tmp_path / f"img{n}.png"
+        image.write_bytes(SAMPLE_IMAGE.read_bytes())
+        images.append(_with_image(n, image))
+    notifier = AppriseNotifier(urls="shoptest://push", images_max=2, images_in_summary=True)
+
+    notifier.notify([_with_image(99, None), *images])
+
+    assert len(sent) == 1
+    assert sent[0]["attach"] == [f"img{n}.png" for n in range(10)]
+
+
+def test_summary_with_images_but_none_available(sent: list[dict[str, Any]]) -> None:
+    notifier = AppriseNotifier(urls="shoptest://push", images_max=1, images_in_summary=True)
+
+    notifier.notify([_with_image(1, None), _with_image(2, None)])
+
+    assert sent[0]["attach"] == []
+
+
+def test_per_item_failure_marks_target_failed(sent: list[dict[str, Any]]) -> None:
+    deliveries = AppriseNotifier(urls="shoptest://fail").send(
+        MessageRenderer().render([_with_image(1), _with_image(2)])
+    )
+
+    assert len(sent) == 2
+    assert [d.ok for d in deliveries] == [False]
+
+
+def test_german_item_messages() -> None:
+    message = MessageRenderer(shop_name="mabgraves", language="de").render(
+        [_rich_listing(1)], test=True
+    )
+
+    assert message.items[0].subject == "[Test] Neu in mabgraves: Tasse 1"
+    assert "12,50 €" in message.items[0].text
 
 
 def _sent_mail(smtp: MagicMock) -> tuple[list[str], EmailMessage]:

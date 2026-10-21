@@ -85,6 +85,9 @@ All settings are read from `.env` in the working directory or from environment v
 | `NOTIFY_CONSOLE` | `auto` | Print notifications to stdout: `auto` only if no other targets are configured (plus the [first run](#first-run)), `true` always (in addition to them), `false` never |
 | `NOTIFY_EXISTING_ON_FIRST_RUN` | `false` | Send the items already in the shop on the [first run](#first-run) to all targets |
 | `NOTIFY_LANGUAGE` | `en` | Language of the built-in messages: `en` or `de` |
+| `NOTIFY_IMAGES` | `true` | Push/chat services get one message per new item with its picture |
+| `NOTIFY_IMAGES_MAX` | `5` | Up to this many new items per poll are sent individually; above, one summary message |
+| `NOTIFY_IMAGES_IN_SUMMARY` | `false` | Attach up to 10 pictures to the summary message (a Telegram album with `?album=yes`) |
 | `NOTIFY_TEMPLATE_DIR` | – | Directory with [custom message templates](#message-templates) |
 | `DB_PATH` | `shop-notify.db` | SQLite database of seen items |
 | `HEARTBEAT_FILE` | next to `DB_PATH` | Touched after every successful poll, used by the [health check](#health-check) |
@@ -123,6 +126,7 @@ For a single target, `NOTIFY_URLS` is enough, e.g. `NOTIFY_URLS="ntfys://ntfy.sh
 
 - **E-mail** recipients don't need to do anything. With Gmail you need a [Google App Password](https://support.google.com/accounts/answer/185833) (requires 2FA); Gmail allows about 500 recipients per day.
 - **ntfy** needs no account: install the app and subscribe to a long, random topic name – everyone who knows the name can read it.
+- **E-mail** gets one HTML message with all new items and their pictures. **Push and chat services** that support attachments (ntfy, Telegram, Signal, Pushover, …) get **one message per item with its picture** – up to `NOTIFY_IMAGES_MAX` items per poll, above that one summary message. Set `NOTIFY_IMAGES_IN_SUMMARY=true` to attach the pictures to the summary as well; for Telegram add `?album=yes` to the URL to get them as one album (ntfy shows only the first picture).
 - The configuration is checked at startup; credentials are masked in the log.
 - If all targets fail, the items stay *new* and are sent again with the next poll. If only some fail, a warning is logged.
 - `notify.yml` and `.env` contain passwords – both are ignored by git and never copied into the Docker image.
@@ -146,11 +150,11 @@ cd /opt/shop-notify && sudo -u shop-notify .venv/bin/shop-notify test-notify   #
 The subject starts with `[Test]`. Use `--url` to try a single Apprise URL before adding it to the configuration, e.g. `shop-notify test-notify --url "ntfys://ntfy.sh/your-topic"`. The exit code is `0` if all targets succeeded, `1` if any failed and `2` for configuration errors.
 
 ### Message templates
-E-mails are sent as HTML with the item's main image, title, price and date; all other services get the compact plain-text version shown above.
+E-mails are sent as HTML with the item's main image, title, price and date; push and chat services get one message per item (`item_subject.txt.j2`, `item_body.txt.j2`) or the compact plain-text summary shown above (`subject.txt.j2`, `body.txt.j2`).
 
 The built-in messages are available in English and German (`NOTIFY_LANGUAGE=de`); dates and prices are formatted accordingly, e.g. `Oct 14, 2026, 19:46` / `€24.50` or `14.10.2026, 19:46 Uhr` / `24,50 €`.
 
-To customise them, copy any of the [built-in templates](src/shop_notify/templates/) (`subject.txt.j2`, `body.txt.j2`, `body.html.j2` from the folder of your language) into a directory and set `NOTIFY_TEMPLATE_DIR` to it – files you don't copy keep their default. Templates use [Jinja2](https://jinja.palletsprojects.com/templates/); the variables are `listings` (with `title`, `url`, `price`, `image_url`, `last_modified`), `shop_name`, `initial` (true for the [first run](#first-run)) and `test` (true for [test notifications](#testing-notifications)), and the filters `localtime` and `money` format dates and prices in the configured language. Values are HTML-escaped automatically in `*.html.j2`.
+To customise them, copy any of the [built-in templates](src/shop_notify/templates/) (`subject.txt.j2`, `body.txt.j2`, `body.html.j2`, `item_subject.txt.j2`, `item_body.txt.j2` from the folder of your language) into a directory and set `NOTIFY_TEMPLATE_DIR` to it – files you don't copy keep their default. Templates use [Jinja2](https://jinja.palletsprojects.com/templates/); the variables are `item` (per-item templates only), `listings` (with `title`, `url`, `price`, `image_url`, `last_modified`), `shop_name`, `initial` (true for the [first run](#first-run)) and `test` (true for [test notifications](#testing-notifications)), and the filters `localtime` and `money` format dates and prices in the configured language. Values are HTML-escaped automatically in `*.html.j2`.
 
 ## Creating an Etsy app
 Shop Notify only reads public listings, so it needs an API key but no OAuth login.

@@ -18,3 +18,4 @@ urls:
 
   # Telegram: create a bot with @BotFather, then add it to a chat
   # - tgram://BOT_TOKEN/CHAT_ID
+  # Add ?album=yes to get several pictures as one album (NOTIFY_IMAGES_IN_SUMMARY)

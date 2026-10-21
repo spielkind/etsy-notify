@@ -26,6 +26,11 @@ class NotifySettings(BaseSettings):
     notify_template_dir: Path | None = None
     # Language of the built-in templates
     notify_language: Literal["en", "de"] = "en"
+    # Push/chat services: one message per item with its image, up to this many items
+    notify_images: bool = True
+    notify_images_max: int = Field(default=5, ge=1)
+    # Above notify_images_max: attach the images to the summary message (Telegram album)
+    notify_images_in_summary: bool = False
 
     @field_validator("log_file", "notify_config", "notify_template_dir", mode="before")
     @classmethod

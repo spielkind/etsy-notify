@@ -8,6 +8,14 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+### Added
+- Push and chat services (ntfy, Telegram, …) get one message per new item
+  with its picture; e-mail stays one HTML message with all items.
+  `NOTIFY_IMAGES`, `NOTIFY_IMAGES_MAX` (default 5, above that one summary
+  message) and `NOTIFY_IMAGES_IN_SUMMARY` (attach pictures to the summary,
+  e.g. as Telegram album); new templates `item_subject.txt.j2` and
+  `item_body.txt.j2` (#10)
+
 ### Changed
 - New items are notified newest first (in Etsy's order) instead of by listing ID
 - HTTP requests are only logged with `LOG_LEVEL=DEBUG`

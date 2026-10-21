@@ -525,7 +525,11 @@ def test_test_notify_reports_failed_targets(
     assert out.count("✗ shoptest://") == 1
     assert "1 of 2 target(s) succeeded." in out
     assert "✓ console" not in out
-    assert {str(s["title"]) for s in sent} == {"[Test] 2 new items in someshop"}
+    assert {str(s["title"]) for s in sent} == {
+        '[Test] New in someshop: Sample: hand-thrown mug "Morning dew"',
+        "[Test] New in someshop: Sample: small vase in sage green (no image)",
+    }
+    assert sorted(len(s["attach"]) for s in sent) == [0, 0, 1, 1]  # type: ignore[arg-type]
 
 
 def test_test_notify_html_mail_contains_sample_image() -> None:
@@ -555,7 +559,7 @@ def test_test_notify_with_url_ignores_configured_targets(
         cli.main(["test-notify", "--url", "shoptest://adhoc"])
 
     assert exc.value.code == 0
-    assert [s["meta"]["host"] for s in sent] == ["adhoc"]  # type: ignore[index]
+    assert {s["meta"]["host"] for s in sent} == {"adhoc"}  # type: ignore[index]
     assert "console" not in capsys.readouterr().out
 
 
@@ -604,8 +608,8 @@ def test_test_notify_in_german(
     monkeypatch.setenv("NOTIFY_LANGUAGE", "de")
 
     assert cli.test_notify(NotifySettings()) == 0
-    assert sent[0]["title"] == "[Test] 2 neue Artikel in dem Shop"
-    assert "Muster: handgedrehte Tasse" in str(sent[0]["body"])
+    assert sent[0]["title"] == "[Test] Neu in dem Shop: Muster: handgedrehte Tasse „Morgentau“"
+    assert "24,50 €" in str(sent[0]["body"])
 
 
 def test_invalid_language_setting(monkeypatch: pytest.MonkeyPatch) -> None:
