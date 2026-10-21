@@ -1,10 +1,26 @@
 [project]
 name = "shop-notify"
-version = "1.0.0"
+version = "1.0.1"
 description = "Watch an Etsy shop for new listings and send notifications."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
+authors = [{ name = "Reik Keutterling", email = "spielkind@gmail.com" }]
+keywords = ["etsy", "notifications", "apprise", "shop", "new-listings", "telegram", "ntfy"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Environment :: No Input/Output (Daemon)",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Communications",
+    "Topic :: Office/Business",
+]
 dependencies = [
     "apprise>=2.0.1",
     "httpx>=0.28",
@@ -12,6 +28,13 @@ dependencies = [
     "pydantic>=2.12",
     "pydantic-settings>=2.11",
 ]
+
+[project.urls]
+Homepage = "https://github.com/spielkind/shop-notify"
+Documentation = "https://github.com/spielkind/shop-notify#readme"
+Changelog = "https://github.com/spielkind/shop-notify/blob/main/CHANGELOG.md"
+Issues = "https://github.com/spielkind/shop-notify/issues"
+Source = "https://github.com/spielkind/shop-notify"
 
 [project.scripts]
 shop-notify = "shop_notify.__main__:main"
@@ -27,6 +50,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "respx>=0.22",
     "ruff>=0.14",
+    "twine>=7.0.0",
     "typos>=1.51.1",
     "zizmor>=1.31.1",
 ]

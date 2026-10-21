@@ -88,7 +88,9 @@ git push --follow-tags
 
 The tag triggers the release workflow (checks that it matches the package version and
 creates a GitHub release from the changelog section – a pre-release for `-rc`/`-beta`
-versions) and publishes the Docker images `X.Y.Z`, `X.Y` and `latest`. The release gets the
+versions), publishes the Docker images `X.Y.Z`, `X.Y` and `latest` and uploads the wheel and
+source archive to [PyPI](https://pypi.org/project/shop-notify/) (trusted publishing with
+attestations; release candidates are only installed with `--pre`). The release gets the
 wheel, the source archive and a CycloneDX SBOM attached, all with a signed build provenance
 attestation (`gh attestation verify <file> --owner spielkind`); the Sigstore bundle of the
 attestation is attached as `shop-notify-<version>.sigstore.json` for offline verification

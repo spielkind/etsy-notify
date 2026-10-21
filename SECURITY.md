@@ -51,6 +51,18 @@ What Shop Notify protects and the threat model are described in
 If the released image is affected and the fix is already in `main` (usually through a
 newer base image), a patch release is published.
 
+## Verifying releases
+
+Docker images, release files and PyPI packages carry signed build provenance from this
+repository's release workflow:
+
+```sh
+gh attestation verify oci://ghcr.io/spielkind/shop-notify:latest --owner spielkind
+gh attestation verify shop_notify-X.Y.Z-py3-none-any.whl --owner spielkind
+```
+
+On PyPI the attestations are shown under *Verified details* of each file.
+
 ## Handling secrets
 
 Shop Notify works with credentials: the Etsy API key and shared secret, mail

@@ -63,6 +63,15 @@ jobs:
             --output-file "dist/shop-notify-${TAG#v}.cdx.json"
           ls -l dist
 
+      - name: Keep the Python packages for the PyPI job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: python-packages
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
       - name: Attest build provenance
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -97,3 +106,24 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
             --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}" dist/*
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+
+  # Trusted publishing (OIDC, no API token); the action adds PEP 740 attestations.
+  # Runs after the GitHub release; if it fails, re-run only this job.
+  pypi:
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/shop-notify/
+    permissions:
+      id-token: write # authenticate to PyPI and sign the attestations
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: python-packages
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          skip-existing: true
