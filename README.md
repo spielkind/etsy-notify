@@ -158,8 +158,9 @@ Images for `linux/amd64` and `linux/arm64` (Raspberry Pi with a 64-bit OS, Apple
 
 | Tag | Content |
 |---|---|
-| `latest`, `main` | current state of the `main` branch |
-| `X.Y.Z`, `X.Y` | releases (git tags `vX.Y.Z`) |
+| `latest` | newest release (including release candidates) |
+| `X.Y.Z`, `X.Y` | a specific release, e.g. `1.0.0-rc.1` (release candidates have no `X.Y` tag) |
+| `main` | current development state of the `main` branch |
 | `sha-<commit>` | a specific commit |
 
 With [`compose.yaml`](compose.yaml) and your `.env` (no checkout needed):
@@ -313,7 +314,20 @@ uv run mypy src tests
 uv run pytest               # includes coverage, fails below 90 %
 ```
 
-CI tests against all supported Python versions, audits the locked dependencies with `pip-audit`, builds the Docker image for both architectures and posts a coverage report on pull requests. Issues and pull requests are welcome.
+CI tests against all supported Python versions, audits the locked dependencies with `pip-audit`, builds the Docker image for both architectures and posts a coverage report on pull requests. Issues and pull requests are welcome – see the [roadmap](https://github.com/spielkind/shop-notify/issues?q=is%3Aopen+label%3Aroadmap) for planned features.
+
+### Releasing
+Changes are listed in [`CHANGELOG.md`](CHANGELOG.md) under *Unreleased*. To publish a release:
+
+```sh
+uv version --bump minor                 # or patch / major / rc; updates pyproject.toml and uv.lock
+# CHANGELOG.md: rename "Unreleased" to "[X.Y.Z] - YYYY-MM-DD", add a new empty "Unreleased"
+git commit -am "chore(release): X.Y.Z"
+git tag -a vX.Y.Z -m "vX.Y.Z"           # SemVer notation, e.g. v1.0.0-rc.2
+git push --follow-tags
+```
+
+The tag triggers the release workflow (checks that it matches the package version and creates a GitHub release from the changelog section – a pre-release for `-rc`/`-beta` versions) and publishes the Docker images `X.Y.Z`, `X.Y` and `latest`.
 
 ## License and disclaimer
 [MIT](LICENSE).

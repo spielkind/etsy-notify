@@ -1,0 +1,57 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Python package versions use the equivalent [PEP 440](https://peps.python.org/pep-0440/)
+notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
+
+## [Unreleased]
+
+## [1.0.0-rc.1] - 2026-10-21
+
+Complete rewrite of the original 2019 tool as **Shop Notify**. Release candidate
+until it has been verified against the real Etsy API with an approved key.
+
+### Added
+- Etsy Open API v3 client: API key authentication, pagination, `retry-after`
+  handling on `429`, daily quota tracking with a warning below 20 % left
+- `ETSY_SHOP_NAME` as alternative to `ETSY_SHOP_ID`; the ID is looked up at startup
+- Notifications via [Apprise](https://github.com/caronc/apprise): e-mail, ntfy,
+  Telegram and 100+ other services, configured in `notify.yml` (`NOTIFY_CONFIG`)
+  or `NOTIFY_URLS`; credentials are masked in the log
+- HTML e-mails with item image, price and date; plain text for other services;
+  customisable Jinja2 templates (`NOTIFY_TEMPLATE_DIR`)
+- `NOTIFY_CONSOLE` to print notifications to stdout in addition to other targets
+- First run: items already in the shop are only recorded and shown on the
+  console (`NOTIFY_EXISTING_ON_FIRST_RUN` to send them anyway)
+- Every notified item is logged with title and URL
+- `shop-notify healthcheck` based on a heartbeat file, `shop-notify --version`
+- Docker image for `linux/amd64` and `linux/arm64` on GHCR with SBOM and
+  signed build provenance, `compose.yaml`
+- systemd unit with sandboxing and `Type=notify` (readiness, status line, watchdog)
+- Graceful shutdown on `SIGINT`/`SIGTERM`; Etsy and notification errors no
+  longer stop the polling loop
+- CI: ruff, mypy (strict), pytest with 100 % coverage, pip-audit, actionlint,
+  Docker builds for both architectures; pre-commit hooks
+
+### Changed
+- Renamed from `etsy-notify` to `shop-notify` (package, command, image, service)
+- Python 3.14+, dependency management with uv instead of Pipenv
+- `POLL_INTERVAL` defaults to 300 seconds and is configurable
+- All settings are read from `.env` or environment variables; nothing is
+  hard-coded anymore
+- SQLite storage keeps only listing ID, title, URL, price and modification time
+
+### Removed
+- Etsy API v2 and OAuth 1 (shut down by Etsy)
+- Built-in Gmail sender (`GMAIL_*`, `MAIL_*` settings); use an Apprise
+  `mailtos://` URL instead
+- Travis CI and Rancher pipeline configuration
+
+## 0.1.0 - 2019
+
+Original version for the Etsy API v2 (never tagged).
+
+[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.1...HEAD
+[1.0.0-rc.1]: https://github.com/spielkind/shop-notify/releases/tag/v1.0.0-rc.1
