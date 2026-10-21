@@ -78,6 +78,12 @@ jobs:
             -c "import time; print(time.strftime('%Z'))")
           [[ "$tz" == CET || "$tz" == CEST ]] || { echo "TZ not applied: $tz"; exit 1; }
 
+      # Image against a fake Etsy API and Mailpit: silent first run, one mail per new
+      # listing, no duplicates
+      - name: End-to-end test
+        if: matrix.platform == 'linux/amd64'
+        run: tests/e2e/run.sh shop-notify:ci
+
       # Fixable critical/high/medium vulnerabilities in OS packages and Python libraries
       # are reported to code scanning and the job summary; critical/high ones fail the
       # build afterwards – except for scheduled runs, which only report them
