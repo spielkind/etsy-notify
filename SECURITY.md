@@ -36,6 +36,8 @@ newer base image), a patch release is published.
 
 Shop Notify works with credentials: the Etsy API key and shared secret, mail
 passwords and bot tokens in `.env` and `notify.yml`. They are masked in the log, never
-copied into the Docker image and ignored by git. If you share logs or configuration in an
+copied into the Docker image and ignored by git. In addition, [gitleaks](https://github.com/gitleaks/gitleaks)
+checks every commit (pre-commit hook) and every push and pull request (CI) for secrets,
+including passwords and bot tokens in notification URLs (see `.gitleaks.toml`). If you share logs or configuration in an
 issue, double-check that no credentials are included – if one leaked, revoke it (Etsy
 app, Google app password, Telegram `@BotFather`).

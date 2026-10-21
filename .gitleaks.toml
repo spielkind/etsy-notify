@@ -1,0 +1,32 @@
+# gitleaks configuration: the default rules plus credentials as they appear in
+# Shop Notify's notification settings (Apprise URLs in .env / notify.yml).
+title = "shop-notify"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "apprise-url-password"
+description = "Password in a notification URL, e.g. mailtos://user:password@gmail.com"
+regex = '''(?i)\b[a-z][a-z0-9+.-]{1,15}s?://[^\s:/@'"]+:([^\s@/'"]{6,})@'''
+secretGroup = 1
+keywords = ["://"]
+
+[[rules]]
+id = "telegram-bot-token-in-url"
+description = "Telegram bot token, e.g. in tgram://<token>/<chat id>"
+regex = '''\b(\d{8,10}:[A-Za-z0-9_-]{35})\b'''
+secretGroup = 1
+keywords = [":"]
+
+# Placeholders used in the documentation and example files
+[[allowlists]]
+description = "Documentation placeholders"
+regexTarget = "match"
+regexes = [
+  '''(?i)app-password''',
+  '''(?i)abcdefghijklmnop''',
+  '''(?i)your[-_]''',
+  '''(?i)AAH-your-bot-token''',
+  '''(?i)secret-pw|:pw@|:pass@|:password@''',
+]

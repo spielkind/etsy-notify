@@ -13,6 +13,8 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
   signed build provenance
 
 ### Security
+- Secret scanning with gitleaks in pre-commit and CI, with rules for
+  passwords and bot tokens in notification URLs
 - Weekly scheduled scan of the released image and rebuild of `main`;
   old commit images are cleaned up automatically
 - Medium-severity vulnerabilities are reported as well (critical and high
