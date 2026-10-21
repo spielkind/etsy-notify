@@ -19,6 +19,7 @@ shop-notify = "shop_notify.__main__:main"
 [dependency-groups]
 dev = [
     "actionlint-py>=1.7.12.25",
+    "hypothesis>=6.170.5",
     "mypy>=1.18",
     "pip-audit>=2.10.1",
     "pre-commit>=4.7.0",
