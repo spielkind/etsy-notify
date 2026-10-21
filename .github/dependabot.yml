@@ -1,14 +1,52 @@
 version: 2
 updates:
+  # New versions are only proposed after a cooldown of 7 days (supply-chain safety).
+  # Python dependencies: one grouped pull request per week; major updates separately
   - package-ecosystem: uv
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build
+    labels: [dependencies]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+    labels: [dependencies, github_actions]
+
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+    labels: [dependencies, docker]
+
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      pre-commit:
+        patterns: ["*"]
+    commit-message:
+      prefix: chore
+    labels: [dependencies]
