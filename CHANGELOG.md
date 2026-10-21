@@ -8,22 +8,31 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
-### Added
-- Releases include the wheel, the source archive and a CycloneDX SBOM with
-  signed build provenance
+## [1.0.0-rc.4] - 2026-10-21
 
 ### Security
+- Fixed vulnerabilities in the Docker image: pip, which is not needed at
+  runtime, was removed together with its outdated vendored libraries –
+  certifi (GHSA-6q48-6c7w-9gw2, critical), urllib3 (CVE-2026-97687,
+  CVE-2026-97689, CVE-2026-97688), msgpack (GHSA-6v7p-g79w-8964) and
+  setuptools (CVE-2025-47273, CVE-2026-59890). The application's own
+  dependencies were not affected.
+- The Docker image is scanned for vulnerabilities (Trivy) on every build and
+  weekly; critical and high findings fail the build, medium ones are reported
+- Base images are pinned by digest
 - Secret scanning with gitleaks in pre-commit and CI, with rules for
   passwords and bot tokens in notification URLs
-- Weekly scheduled scan of the released image and rebuild of `main`;
-  old commit images are cleaned up automatically
-- Medium-severity vulnerabilities are reported as well (critical and high
-  still fail the build)
-- The Docker image is scanned for vulnerabilities (Trivy); pip was removed
-  from the runtime image as its vendored libraries were outdated
-- Base images are pinned by digest
+- Release tags can only be created by maintainers, must be signed and must
+  point to a commit on `main`; published releases are immutable
+
+### Added
+- Releases include the wheel, the source archive, a CycloneDX SBOM and the
+  Sigstore bundle of the signed build provenance
+- Weekly maintenance run: rebuild of `main`, scan of the released image and
+  cleanup of old commit images
 
 ### Changed
+- The container runs as numeric user and group `1000:1000`
 - `compose.yaml`: container is named `shop-notify` (was `shop-notify-shop-notify-1`)
 
 ## [1.0.0-rc.3] - 2026-10-21
@@ -109,7 +118,8 @@ until it has been verified against the real Etsy API with an approved key.
 
 Original version for the Etsy API v2 (never tagged).
 
-[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.3...HEAD
+[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.4...HEAD
+[1.0.0-rc.4]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/spielkind/shop-notify/releases/tag/v1.0.0-rc.1
