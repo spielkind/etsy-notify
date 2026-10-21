@@ -8,6 +8,8 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] - 2026-10-21
+
 ### Added
 - `shop-notify test-notify` sends a sample notification to all configured
   targets and reports the result per target; works without Etsy credentials,
@@ -73,5 +75,6 @@ until it has been verified against the real Etsy API with an approved key.
 
 Original version for the Etsy API v2 (never tagged).
 
-[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.1...HEAD
+[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.2...HEAD
+[1.0.0-rc.2]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/spielkind/shop-notify/releases/tag/v1.0.0-rc.1
