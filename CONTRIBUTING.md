@@ -3,6 +3,9 @@
 Thanks for your interest! Bug reports, ideas and pull requests are welcome – please
 check the [roadmap](https://github.com/spielkind/shop-notify/issues?q=is%3Aopen+label%3Aroadmap)
 and the open issues first. For security problems see [SECURITY.md](SECURITY.md).
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md); how decisions are made is
+described in [GOVERNANCE.md](GOVERNANCE.md) and the design in
+[docs/architecture.md](docs/architecture.md).
 
 ## Development setup
 
@@ -28,19 +31,30 @@ The tests never use the network or your local `.env`: Etsy is mocked with
 [respx](https://lundberg.github.io/respx/), notifications go to a fake `shoptest://`
 Apprise service (see `tests/conftest.py`).
 
+`tests/e2e/run.sh` tests the Docker image end to end against a fake Etsy API and
+[Mailpit](https://mailpit.axllent.org) (needs Docker; runs in CI for every build):
+
+```sh
+docker build -t shop-notify:ci . && tests/e2e/run.sh
+```
+
 ## Pull requests
 
 - One topic per pull request; link the issue (`Closes #12`).
 - Add tests for new behaviour and keep the coverage at 100 %.
 - Add a line to `CHANGELOG.md` under *Unreleased* for user-visible changes.
 - Update the README, `.env.example` and `notify.example.yml` when configuration changes.
+- Sign off your commits (`git commit -s`) to certify the
+  [Developer Certificate of Origin](https://developercertificate.org): you wrote the
+  change or have the right to submit it under the project's MIT license.
 - Use a [Conventional Commits](https://www.conventionalcommits.org/) title
   (`feat: …`, `fix: …`, `docs: …`, `ci: …`, `chore: …`) – pull requests are squash-merged
   and the title becomes the commit message.
 
 CI must pass before merging: secret scan (gitleaks), lint (ruff, mypy, actionlint, zizmor, hadolint,
 typos), tests on all supported
-Python versions, dependency audit and the Docker build for amd64 and arm64.
+Python versions, dependency audit and the Docker build for amd64 and arm64 including the
+end-to-end test.
 
 ## Dependency updates
 

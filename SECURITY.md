@@ -13,6 +13,25 @@ instead. You can expect a first answer within a week.
 Please include the affected version (`shop-notify --version`), how it is run (Docker,
 systemd, locally) and steps to reproduce.
 
+## How reports are handled
+
+1. **Acknowledge** – a maintainer confirms receipt within a week.
+2. **Assess** – we reproduce the issue, rate its severity (CVSS) and agree on a
+   timeline with the reporter. If it is not a vulnerability, we explain why.
+3. **Fix** – the fix is developed in a private fork of the security advisory and
+   reviewed there; a CVE is requested through GitHub if appropriate.
+4. **Release** – a patch release with the fix is published (target: within 60 days of
+   the report, critical issues as soon as possible); the image is rebuilt and the
+   changelog lists the fix under *Security*.
+5. **Disclose** – the [security advisory](https://github.com/spielkind/shop-notify/security/advisories)
+   is published together with the release.
+
+Reporters are credited by name (or handle) in the advisory and the changelog, unless
+they prefer to stay anonymous.
+
+What Shop Notify protects and the threat model are described in
+[docs/security.md](docs/security.md).
+
 ## Vulnerability scanning
 
 - Every Docker build (pull requests, `main`, releases) is scanned with

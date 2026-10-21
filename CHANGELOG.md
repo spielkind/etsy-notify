@@ -8,6 +8,12 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+### Added
+- Documentation of the architecture, the security model (threat model and
+  assurance case), governance and the vulnerability handling process;
+  Code of Conduct
+- End-to-end test of the Docker image in CI
+
 ## [1.0.0-rc.4] - 2026-10-21
 
 ### Security
