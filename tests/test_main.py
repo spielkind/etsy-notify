@@ -1,9 +1,11 @@
 import email
 import logging
 import signal
+import time
 from collections.abc import Iterator, Sequence
+from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -15,7 +17,7 @@ from shop_notify import __version__
 from shop_notify.config import NotifySettings, Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError, Quota
-from shop_notify.models import Listing
+from shop_notify.models import Listing, Money
 from shop_notify.notifications import (
     AppriseNotifier,
     ConsoleNotifier,
@@ -31,6 +33,8 @@ BASE = "https://openapi.etsy.com/v3/application/"
 def _client(quota: Quota | None = None) -> MagicMock:
     client = MagicMock(spec=EtsyClient)
     client.quota = quota
+    client.listings_reported = client.listings_received = 0
+    client.listings_complete = True
     return client
 
 
@@ -202,7 +206,7 @@ def test_run_once_does_not_log_items_if_notification_fails(
         cli.run_once(client, store, notifier, 42, notify_existing=True)
 
     assert "New item:" not in caplog.text
-    assert [i.listing_id for i in store.sync([make_listing(1)])] == [1]
+    assert [i.listing_id for i in store.sync([make_listing(1)]).pending] == [1]
     store.close()
 
 
@@ -221,52 +225,105 @@ def test_run_once_notifies_without_images_if_loading_fails(
     store.close()
 
 
-def test_run_once_forgets_listings_missing_for_longer_than_configured(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def _at(seconds: float) -> AbstractContextManager[Any]:
+    """Freeze the clock of the database and the poll logic."""
+    return patch("time.time", return_value=seconds)
+
+
+def test_run_once_notifies_items_back_in_the_shop(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO)
     client = _client()
-    client.listings_complete = True
+    client.listing_images.return_value = {}
     store = ListingStore(":memory:")
     notifier = RecordingNotifier()
     client.active_listings.return_value = [make_listing(1), make_listing(2)]
-    with patch("shop_notify.db.time.time", return_value=0):
+    with _at(0):
         cli.run_once(client, store, notifier, 42)
 
     client.active_listings.return_value = [make_listing(2)]
-    with patch("shop_notify.db.time.time", return_value=3600):
+    with _at(3600):
         cli.run_once(client, store, notifier, 42, forget_after_hours=1)
-    assert "forgotten" not in caplog.text
-    with patch("shop_notify.db.time.time", return_value=3601):
+    assert "No longer in the shop" not in caplog.text
+    with _at(3601):
         cli.run_once(client, store, notifier, 42, forget_after_hours=1)
-    assert "No longer in the shop, forgotten: Item 1 (https://www.etsy.com/listing/1)" in (
-        caplog.text
-    )
+    assert "No longer in the shop: Item 1 (https://www.etsy.com/listing/1)" in caplog.text
 
     client.active_listings.return_value = [make_listing(1), make_listing(2)]
-    client.listing_images.return_value = {}
-    assert cli.run_once(client, store, notifier, 42, forget_after_hours=1) == 1
+    with _at(7200):
+        assert cli.run_once(client, store, notifier, 42, forget_after_hours=1) == 1
+    assert notifier.calls[-1] == [1]
+    assert "Back in the shop: Item 1 (https://www.etsy.com/listing/1), last seen" in caplog.text
+    assert "Notified 1 item(s)" in caplog.text
+    assert [p.back for p in store.polls()] == [0, 0, 0, 1]
     store.close()
 
 
-def test_run_once_does_not_forget_after_incomplete_fetch() -> None:
+def test_run_once_can_skip_items_back_in_the_shop(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
     client = _client()
-    client.listings_complete = True
+    store = ListingStore(":memory:")
+    notifier = RecordingNotifier()
+    client.active_listings.return_value = [make_listing(1)]
+    with _at(0):
+        cli.run_once(client, store, notifier, 42)
+    client.active_listings.return_value = []
+    with _at(10):
+        cli.run_once(client, store, notifier, 42, forget_after_hours=0)
+    with _at(20):
+        cli.run_once(client, store, notifier, 42, forget_after_hours=0)
+    client.active_listings.return_value = [make_listing(1)]
+    with _at(30):
+        assert cli.run_once(client, store, notifier, 42, notify_back=False) == 0
+
+    assert len(notifier.calls) == 1  # only the silent first run
+    assert "Back in the shop (not notified): Item 1" in caplog.text
+    assert [e.event for e in store.events()][-2:] == ["back", "recorded"]
+    store.close()
+
+
+def test_run_once_handles_incomplete_results(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    client = _client()
     store = ListingStore(":memory:")
     notifier = RecordingNotifier()
     client.active_listings.return_value = [make_listing(1), make_listing(2)]
-    with patch("shop_notify.db.time.time", return_value=0):
+    client.listings_reported = client.listings_received = 2
+    with _at(0):
         cli.run_once(client, store, notifier, 42)
 
-    client.listings_complete = False
     client.active_listings.return_value = [make_listing(2)]
-    with patch("shop_notify.db.time.time", return_value=10_000):
-        cli.run_once(client, store, notifier, 42, forget_after_hours=0)
+    client.listings_complete, client.listings_reported, client.listings_received = False, 2, 1
+    with _at(600):
+        cli.run_once(client, store, notifier, 42, forget_after_hours=2)
+    assert "INFO" in caplog.text
+    assert "Etsy returned 1 of 2 active listings - not tracking missing" in caplog.text
+    with _at(600 + 3601):
+        cli.run_once(client, store, notifier, 42, forget_after_hours=2)
+    assert "Etsy has returned 1 of 2 active listings for 60 min" in caplog.text
+    assert store.polls()[-1].missing == 0
+    with _at(600 + 7201):
+        cli.run_once(client, store, notifier, 42, forget_after_hours=2)
+    assert "for 2 h - processing it anyway" in caplog.text
+    assert store.polls()[-1].missing == 1
+    assert [p.complete for p in store.polls()] == [True, False, False, False]
+    store.close()
 
-    client.listings_complete = True
-    client.active_listings.return_value = [make_listing(1), make_listing(2)]
-    assert cli.run_once(client, store, notifier, 42, forget_after_hours=0) == 0
-    assert notifier.calls == [[1, 2]]  # only the silent first run
+
+def test_run_once_records_failed_polls() -> None:
+    client = _client()
+    store = ListingStore(":memory:")
+    client.active_listings.side_effect = EtsyError("Etsy is down")
+    with pytest.raises(EtsyError):
+        cli.run_once(client, store, RecordingNotifier(), 42)
+
+    client.active_listings.side_effect = None
+    client.active_listings.return_value = [make_listing(1)]
+    notifier = MagicMock()
+    notifier.notify.side_effect = NotificationError("all targets failed")
+    with pytest.raises(NotificationError):
+        cli.run_once(client, store, notifier, 42, notify_existing=True)
+
+    assert [p.error for p in store.polls()] == ["Etsy is down", "all targets failed"]
     store.close()
 
 
@@ -283,6 +340,7 @@ def test_run_passes_settings_to_each_poll(
         "LOG_FILE": "",
         "NOTIFY_EXISTING_ON_FIRST_RUN": "true",
         "FORGET_AFTER_HOURS": "2.5",
+        "NOTIFY_BACK": "false",
     }.items():
         monkeypatch.setenv(key, value)
     route = respx.get(f"{BASE}shops/42/listings/active").mock(
@@ -299,7 +357,7 @@ def test_run_passes_settings_to_each_poll(
     with patch.object(cli, "run_once", fake_run_once):
         cli.main([])
 
-    assert calls == [{"notify_existing": True, "forget_after_hours": 2.5}]
+    assert calls == [{"notify_existing": True, "notify_back": False, "forget_after_hours": 2.5}]
     assert route.calls[0].request.headers["x-api-key"] == "key:secret"
 
 
@@ -710,3 +768,100 @@ def test_setup_logging_quiets_httpx(level: str, httpx_level: int, restore_loggin
 
     assert logging.getLogger("httpx").level == httpx_level
     logging.getLogger("httpx").setLevel(logging.NOTSET)
+
+
+# --- history -------------------------------------------------------------------
+
+
+@pytest.fixture
+def history_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    path = tmp_path / "history.db"
+    monkeypatch.setenv("DB_PATH", str(path))
+    store = ListingStore(path)
+    item = make_listing(1).model_copy(
+        update={
+            "state_timestamp": 1_700_000_000,
+            "price": Money(amount=500, divisor=100, currency_code="EUR"),
+        }
+    )
+    now = time.time()
+    with patch("time.time", return_value=now - 3600):
+        store.mark_as_notified(store.sync([item]).pending)
+        store.record_poll(reported=1, received=1, complete=True)
+    with patch("time.time", return_value=now - 600):
+        store.sync([], complete=True)
+        store.record_poll(reported=1, received=0, complete=False)
+    with patch("time.time", return_value=now - 300):
+        store.sync([item])
+        store.record_poll(error="Etsy is down")
+    store.close()
+    return path
+
+
+def test_history_of_recent_events(history_db: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["history"])
+    assert exit_info.value.code == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [line.split()[3] for line in lines] == ["new", "notified", "missing"]
+    assert "Item 1" in lines[0]
+    assert "price: 5.00 EUR, active_since: 2023-11-" in lines[0]
+    assert "seconds: 0.9 h" in lines[2]
+
+
+def test_history_of_one_listing(history_db: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["history", "1", "--since", "30m"])
+    assert exit_info.value.code == 0
+    assert [line.split()[3] for line in capsys.readouterr().out.splitlines()] == ["missing"]
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["history", "2"])
+    assert exit_info.value.code == 1
+    assert "Listing 2 is not in the database" in capsys.readouterr().out
+
+
+def test_history_of_polls(history_db: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["history", "--polls"])
+    lines = capsys.readouterr().out.splitlines()
+    assert [line[18:] for line in lines] == [
+        "1/1 listings",
+        "0/1 listings (incomplete)",
+        "failed: Etsy is down",
+    ]
+
+    with pytest.raises(SystemExit):
+        cli.main(["history", "--polls", "--since", "8m"])
+    assert len(capsys.readouterr().out.splitlines()) == 1
+
+
+def test_history_without_database(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["history"])
+    assert exit_info.value.code == 1
+    assert "No database at shop-notify.db" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("argv", "error"),
+    [
+        (["history", "--since", "7x"], "invalid period '7x'"),
+        (["history", "--since", "d"], "invalid period 'd'"),
+        (["run", "--polls"], "can only be used with history"),
+        (["healthcheck", "1"], "can only be used with history"),
+        (["history", "1", "--polls"], "--polls can't be combined"),
+    ],
+)
+def test_history_argument_errors(
+    argv: list[str], error: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(argv)
+    assert error in capsys.readouterr().err
+
+
+def test_parse_since() -> None:
+    assert cli.parse_since("30m") == 1800
+    assert cli.parse_since("12h") == 12 * 3600
+    assert cli.parse_since("2w") == 14 * 86400

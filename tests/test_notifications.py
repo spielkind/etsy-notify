@@ -1,5 +1,5 @@
 import email
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.message import Message as EmailMessage
 from pathlib import Path
 from typing import Any
@@ -7,12 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from shop_notify.models import Listing, Money
+from shop_notify.models import Back, Listing, Money
 from shop_notify.notifications import (
     AppriseNotifier,
     ConsoleNotifier,
     MessageRenderer,
     NotificationError,
+    format_ago,
     format_datetime,
     format_money,
 )
@@ -47,6 +48,74 @@ def test_render_text_body() -> None:
     assert "https://www.etsy.com/listing/1" in message.text
     assert "\n\nVase 2\n" in message.text
     assert "€" not in message.text.split("Vase 2")[1]
+
+
+def _back(listing: Listing, *, days: int = 30, previous: int | None = 2499) -> Listing:
+    previous_price = Money(amount=previous, divisor=100, currency_code="EUR") if previous else None
+    return listing.model_copy(
+        update={
+            "back": Back(
+                last_seen=datetime.now(UTC) - timedelta(days=days),
+                previous_price=previous_price,
+            )
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("language", "subjects", "line"),
+    [
+        (
+            "en",
+            ("1 item back in someshop", "1 new item and 1 back in someshop", "Back in someshop"),
+            "Back in the shop · €12.50 (was €24.99) · last seen ",
+        ),
+        (
+            "de",
+            ("1 Artikel wieder in someshop", "1 neuer Artikel und 1 wieder in someshop", "Wieder"),
+            "Wieder im Shop · 12,50 € (vorher 24,99 €) · zuletzt gesehen ",
+        ),
+    ],
+)
+def test_render_items_back_in_the_shop(
+    language: str, subjects: tuple[str, str, str], line: str
+) -> None:
+    renderer = MessageRenderer(shop_name="someshop", language=language)
+    back = _back(_rich_listing(1))
+
+    message = renderer.render([back])
+    assert message.subject == subjects[0]
+    assert line in message.text
+    assert message.items[0].subject.startswith(subjects[2])
+    assert line in message.items[0].text
+    assert "line-through" in message.html
+    assert renderer.render([make_listing(2), back]).subject == subjects[1]
+
+
+def test_render_item_back_without_price_change() -> None:
+    message = MessageRenderer().render([_back(_rich_listing(1), previous=None, days=2)])
+    assert "Back in the shop · €12.50 · last seen " in message.text
+    assert "(2 days ago)" in message.text
+    assert "line-through" not in message.html
+
+
+@pytest.mark.parametrize(
+    ("seconds", "en", "de"),
+    [
+        (-5, "0 minutes ago", "vor 0 Minuten"),
+        (60, "1 minute ago", "vor 1 Minute"),
+        (89 * 60, "89 minutes ago", "vor 89 Minuten"),
+        (3 * 3600, "3 hours ago", "vor 3 Stunden"),
+        (47 * 3600, "47 hours ago", "vor 47 Stunden"),
+        (2 * 86400, "2 days ago", "vor 2 Tagen"),
+        (86400 * 13, "13 days ago", "vor 13 Tagen"),
+        (86400 * 14, "2 weeks ago", "vor 2 Wochen"),
+        (86400 * 7 * 30, "30 weeks ago", "vor 30 Wochen"),
+    ],
+)
+def test_format_ago(seconds: float, en: str, de: str) -> None:
+    assert format_ago(seconds, "en") == en
+    assert format_ago(seconds, "de") == de
 
 
 def test_render_html_body() -> None:

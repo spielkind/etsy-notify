@@ -4,3 +4,5 @@
 certifi = "certifi"
 # in-toto attestation format (*.intoto.jsonl)
 intoto = "intoto"
+# German ("vor 3 Tagen" = "3 days ago")
+vor = "vor"

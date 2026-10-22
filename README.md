@@ -14,7 +14,7 @@
 
 Shop Notify watches an Etsy shop and tells you – and anyone else you like – as soon as new items appear. Perfect for one-of-a-kind pieces that sell out quickly.
 
-- **New and re-appeared items:** every listing is reported once; if it is gone for more than a day and comes back, you hear about it again.
+- **New items and items back in the shop:** every listing is reported once; if it is gone for more than a day and comes back, you hear about it – with its previous price and when it was last seen.
 - **Any notification channel:** HTML e-mail with item images to as many recipients as you want, push to your phone via ntfy, Telegram, Signal and [100+ more](https://github.com/caronc/apprise/wiki) – also several at once.
 - **Runs unattended:** made for a Raspberry Pi, as a Docker container or systemd service, with health check, watchdog and Etsy rate-limit handling.
 
@@ -29,7 +29,7 @@ Every few minutes Shop Notify fetches the active listings of the shop from the [
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/spielkind/shop-notify/main/docs/lifecycle-dark.svg">
-  <img alt="Lifecycle of a listing: New, then Notified once sent, then Forgotten once it has been gone from the shop for 24 hours; if it re-appears it is New again. Failed notifications are retried with the next poll." src="https://raw.githubusercontent.com/spielkind/shop-notify/main/docs/lifecycle-light.svg">
+  <img alt="Lifecycle of a listing: New, then Notified once sent, then Gone once it has been gone from the shop for 24 hours; if it comes back it is notified as back in the shop. Failed notifications are retried with the next poll." src="https://raw.githubusercontent.com/spielkind/shop-notify/main/docs/lifecycle-light.svg">
 </picture>
 
 ### First run
@@ -83,7 +83,9 @@ All settings are read from `.env` in the working directory or from environment v
 | `ETSY_SHOP_NAME` | – | Shop to watch, as in `etsy.com/shop/<name>`; the ID is looked up at startup |
 | `ETSY_SHOP_ID` | – | Numeric shop ID, alternative to `ETSY_SHOP_NAME` |
 | `POLL_INTERVAL` | `300` | Seconds between two polls (minimum 10), see [below](#choosing-the-poll-interval) |
-| `FORGET_AFTER_HOURS` | `24` | A notified item is forgotten once it has been gone from the shop this long; if it comes back later, it is notified again. Shorter gaps – Etsy's listing index is occasionally incomplete – don't cause a notification |
+| `FORGET_AFTER_HOURS` | `24` | An item counts as gone once it has been missing from the shop this long; if it comes back later, it is notified as back in the shop. Shorter gaps – Etsy's listing index is occasionally incomplete – don't cause a notification |
+| `NOTIFY_BACK` | `true` | Notify items that are back in the shop; with `false` they are only recorded in the history |
+| `POLL_HISTORY_DAYS` | `14` | Days the poll log is kept (`shop-notify history --polls`); the listing history is kept forever |
 | `NOTIFY_CONFIG` | – | Path to an Apprise YAML file with notification targets |
 | `NOTIFY_URLS` | – | One or more Apprise URLs, short form for simple setups |
 | `NOTIFY_CONSOLE` | `auto` | Print notifications to stdout: `auto` only if no other targets are configured (plus the [first run](#first-run)), `true` always (in addition to them), `false` never |
@@ -162,6 +164,24 @@ shop-notify
 Update with `uv tool upgrade shop-notify`. To run it from a clone of the repository instead: `uv sync`, then `uv run shop-notify`.
 
 Stop it with `Ctrl+C`.
+
+### History
+Shop Notify keeps a history of every listing – when it appeared, was notified, went missing, was gone or came back, and price and title changes – and a log of the polls of the last 14 days:
+
+```sh
+shop-notify history                      # events of the last 7 days
+shop-notify history 1550875589           # everything about one listing
+shop-notify history --since 2w           # a longer period (m, h, d, w)
+shop-notify history --polls --since 1d   # the polls, e.g. incomplete answers from Etsy
+docker compose exec shop-notify shop-notify history   # in Docker
+```
+
+```text
+2026-10-21 09:07   1550875589  new            Mermaid Dreams- 5 x 7 Mini Art Print  (price: 24.99 USD, created: 2023-08-23 19:26, …)
+2026-10-23 14:00   1550875589  price_changed  Mermaid Dreams- 5 x 7 Mini Art Print  (old: 24.99 USD, new: 19.99 USD)
+```
+
+Nothing before the first run is known (Etsy has no history), and changes are only noticed at the next poll. The database layout is described in [docs/architecture.md](https://github.com/spielkind/shop-notify/blob/main/docs/architecture.md#database).
 
 ### Health check
 After every successful poll Shop Notify touches a heartbeat file. `shop-notify healthcheck` exits with `0` if the last successful poll is younger than `2 × POLL_INTERVAL + 60 s`, otherwise with `1` – e.g. when Etsy rejects the API key or the network is down. Docker uses it for its health status; manually:

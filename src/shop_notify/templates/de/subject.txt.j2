@@ -1,7 +1,13 @@
 {% set count = listings | length %}
+{% set back = listings | selectattr("back") | list | length %}
+{% set new = count - back %}
 {% if test %}[Test] {% endif %}
 {% if initial %}
 Erster Lauf: {{ count }} Artikel aktuell in {{ shop_name or "dem Shop" }} (gespeichert, nicht gemeldet)
-{% else %}
+{% elif not back %}
 {{ count }} neue{{ "r" if count == 1 }} Artikel in {{ shop_name or "dem Shop" }}
+{% elif not new %}
+{{ back }} Artikel wieder in {{ shop_name or "dem Shop" }}
+{% else %}
+{{ new }} neue{{ "r" if new == 1 }} Artikel und {{ back }} wieder in {{ shop_name or "dem Shop" }}
 {% endif %}

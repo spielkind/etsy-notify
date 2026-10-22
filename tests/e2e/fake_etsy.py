@@ -6,6 +6,8 @@ GET  /v3/application/listings/batch               → main image per listing
 GET  /image.png                                   → sample image
 POST /_add                                        → publish one more listing
 POST /_hide_once                                  → leave out the oldest listing once
+POST /_hide_for/<seconds>                         → leave out the oldest listing for a while;
+                                                    it comes back 1.00 more expensive
 
 Run with: python fake_etsy.py PORT
 """
@@ -23,7 +25,7 @@ IMAGE = Path(__file__).resolve().parents[2] / "docs" / "sample-item.png"
 
 listings: list[dict[str, object]] = []
 port = 0
-state = {"hide_once": False}
+state: dict[str, float] = {"hide_once": 0, "hidden_until": 0}
 
 
 def add_listing() -> dict[str, object]:
@@ -68,8 +70,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"count": len(shops), "results": shops})
         elif url.path == f"/v3/application/shops/{SHOP_ID}/listings/active":
             # like a gap in Etsy's listing index: the listing is missing everywhere
-            visible = listings[:-1] if state["hide_once"] else listings
-            state["hide_once"] = False
+            hidden = state["hide_once"] or time.time() < state["hidden_until"]
+            visible = listings[:-1] if hidden else listings
+            state["hide_once"] = 0
             offset = int(query.get("offset", ["0"])[0])
             limit = int(query.get("limit", ["100"])[0])
             page = [
@@ -95,7 +98,13 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/_add":
             self._json(add_listing())
         elif self.path == "/_hide_once":
-            state["hide_once"] = True
+            state["hide_once"] = 1
+            self._json({})
+        elif self.path.startswith("/_hide_for/"):
+            state["hidden_until"] = time.time() + float(self.path.rsplit("/", 1)[1])
+            price = listings[-1]["price"]
+            assert isinstance(price, dict)
+            price["amount"] += 100
             self._json({})
         else:
             self.send_error(404)

@@ -132,6 +132,43 @@ def check_quota(client: EtsyClient) -> None:
         log.debug("Etsy API requests left today: %d of %d", quota.remaining, quota.limit)
 
 
+INCOMPLETE_WARNING_AFTER = 3600
+
+
+def listings_complete(client: EtsyClient, store: ListingStore, forget_after: float) -> bool:
+    """Whether to track missing listings, given how complete Etsy's response was.
+
+    Etsy's count of active listings is sometimes ahead of the listings it returns. Such
+    a response doesn't mark anything as missing; if it persists for longer than
+    ``forget_after`` seconds, it is processed anyway so that nothing is blocked forever.
+    """
+    if client.listings_complete:
+        return True
+    since = store.incomplete_since()
+    duration = 0.0 if since is None else time.time() - since.timestamp()
+    counts = (client.listings_received, client.listings_reported)
+    if duration > forget_after:
+        log.warning(
+            "Etsy has returned %d of %d active listings for %.0f h - processing it anyway",
+            *counts,
+            duration / 3600,
+        )
+        return True
+    if duration > INCOMPLETE_WARNING_AFTER:
+        log.warning(
+            "Etsy has returned %d of %d active listings for %.0f min - "
+            "missing listings are not tracked meanwhile",
+            *counts,
+            duration / 60,
+        )
+    else:
+        log.info(
+            "Etsy returned %d of %d active listings - not tracking missing listings this time",
+            *counts,
+        )
+    return False
+
+
 def run_once(
     client: EtsyClient,
     store: ListingStore,
@@ -139,39 +176,79 @@ def run_once(
     shop_id: int,
     *,
     notify_existing: bool = False,
+    notify_back: bool = True,
     forget_after_hours: float = 24,
 ) -> int:
-    """Poll once and notify new items; returns the number of notified items.
+    """Poll once and notify new items and items back in the shop.
 
-    On the first run (empty database) the existing items are only recorded unless
-    ``notify_existing`` is set; notifiers still receive them flagged as ``initial``.
+    Returns the number of notified items. On the first run (empty database) the
+    existing items are only recorded unless ``notify_existing`` is set; notifiers still
+    receive them flagged as ``initial``. Every poll is recorded, including failed ones.
     """
-    listings = list(client.active_listings(shop_id))
+    try:
+        listings = list(client.active_listings(shop_id))
+    except EtsyError as e:
+        store.record_poll(error=str(e))
+        raise
     log.debug("Fetched %d active listings from shop %s", len(listings), shop_id)
     check_quota(client)
 
+    forget_after = forget_after_hours * 3600
     first_run = store.is_empty()
-    new_items = store.sync(listings)
-    if client.listings_complete:
-        for item in store.forget(forget_after_hours * 3600):
-            log.info("No longer in the shop, forgotten: %s (%s)", item.title, item.url)
-    if new_items and first_run and not notify_existing:
-        notifier.notify(new_items, initial=True)
-        store.mark_as_notified(new_items)
-        log.info(
-            "First run: %d existing item(s) recorded, notifications start with the next new item",
-            len(new_items),
+    result = store.sync(
+        listings,
+        complete=listings_complete(client, store, forget_after),
+        forget_after=forget_after,
+    )
+    for item in result.gone:
+        log.info("No longer in the shop: %s (%s)", item.title, item.url)
+    pending = result.pending
+    if not notify_back:
+        skipped = [item for item in pending if item.back]
+        store.mark_as_notified(skipped, sent=False)
+        for item in skipped:
+            log.info("Back in the shop (not notified): %s (%s)", item.title, item.url)
+        pending = [item for item in pending if not item.back]
+
+    error = None
+    try:
+        if pending and first_run and not notify_existing:
+            notifier.notify(pending, initial=True)
+            store.mark_as_notified(pending, sent=False)
+            log.info(
+                "First run: %d existing item(s) recorded, "
+                "notifications start with the next new item",
+                len(pending),
+            )
+            return 0
+        if pending:
+            notifier.notify(add_images(client, pending))
+            store.mark_as_notified(pending)
+            for item in pending:
+                if item.back:
+                    log.info(
+                        "Back in the shop: %s (%s), last seen %s",
+                        item.title,
+                        item.url,
+                        f"{item.back.last_seen.astimezone():%Y-%m-%d %H:%M}",
+                    )
+                else:
+                    log.info("New item: %s (%s)", item.title, item.url)
+            log.info("Notified %d item(s)", len(pending))
+        else:
+            log.info("No new items this time")
+        return len(pending)
+    except NotificationError as e:
+        error = str(e)
+        raise
+    finally:
+        store.record_poll(
+            reported=client.listings_reported,
+            received=client.listings_received,
+            complete=client.listings_complete,
+            result=result,
+            error=error,
         )
-        return 0
-    if new_items:
-        notifier.notify(add_images(client, new_items))
-        store.mark_as_notified(new_items)
-        for item in new_items:
-            log.info("New item: %s (%s)", item.title, item.url)
-        log.info("Notified %d new item(s)", len(new_items))
-    else:
-        log.info("No new items this time")
-    return len(new_items)
 
 
 def healthcheck(settings: Settings, now: float | None = None) -> int:
@@ -223,7 +300,7 @@ def run(settings: Settings) -> None:
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
-    store = ListingStore(settings.db_path)
+    store = ListingStore(settings.db_path, poll_history_days=settings.poll_history_days)
     with EtsyClient(
         api_key=settings.etsy_api_key.get_secret_value(),
         shared_secret=settings.etsy_shared_secret.get_secret_value(),
@@ -240,6 +317,7 @@ def run(settings: Settings) -> None:
                         notifier,
                         shop_id,
                         notify_existing=settings.notify_existing_on_first_run,
+                        notify_back=settings.notify_back,
                         forget_after_hours=settings.forget_after_hours,
                     )
                     settings.heartbeat_path.touch()
@@ -342,6 +420,80 @@ def test_notify(settings: NotifySettings, url: str | None = None) -> int:
     return 0 if succeeded == len(deliveries) else 1
 
 
+_SINCE_UNITS = {"m": 60, "h": 3600, "d": 86400, "w": 7 * 86400}
+_TIME_DETAILS = ("since", "last_seen", "created", "renewed", "active_since", "modified")
+
+
+def parse_since(value: str) -> float:
+    """Parse a period like ``30m``, ``12h``, ``7d`` or ``2w`` into seconds."""
+    number, unit = value[:-1], value[-1:]
+    if unit not in _SINCE_UNITS or not number.isdigit():
+        raise argparse.ArgumentTypeError(f"invalid period {value!r}, use e.g. 12h, 7d or 2w")
+    return int(number) * _SINCE_UNITS[unit]
+
+
+def _local(value: datetime) -> str:
+    return f"{value.astimezone():%Y-%m-%d %H:%M}"
+
+
+def _format_details(details: dict[str, object]) -> str:
+    parts = []
+    for key, value in details.items():
+        text = str(value)
+        if key in _TIME_DETAILS and isinstance(value, int):
+            text = _local(datetime.fromtimestamp(value))
+        elif key == "seconds" and isinstance(value, int):
+            text = f"{value / 3600:.1f} h"
+        parts.append(f"{key}: {text}")
+    return ", ".join(parts)
+
+
+def history(
+    settings: NotifySettings,
+    listing_id: int | None = None,
+    since: float | None = None,
+    *,
+    polls: bool = False,
+) -> int:
+    """Print the recorded events (or polls) from the database."""
+    if not settings.db_path.is_file():
+        print(f"No database at {settings.db_path} - has Shop Notify run yet?")
+        return 1
+    store = ListingStore(settings.db_path)
+    try:
+        if polls:
+            start = time.time() - (since if since is not None else 86400)
+            for poll in store.polls(since=start):
+                if poll.error:
+                    line = f"failed: {poll.error}"
+                else:
+                    counts = f"{poll.received}/{poll.reported} listings"
+                    line = counts + ("" if poll.complete else " (incomplete)")
+                    changes = {
+                        "new": poll.new,
+                        "back": poll.back,
+                        "missing": poll.missing,
+                        "gone": poll.gone,
+                    }
+                    line += "".join(f", {n} {k}" for k, n in changes.items() if n)
+                print(f"{_local(poll.time)}  {line}")
+            return 0
+        default = 7 * 86400 if listing_id is None else None
+        period = since if since is not None else default
+        start = 0 if period is None else time.time() - period
+        events = store.events(listing_id=listing_id, since=start)
+        if listing_id is not None and not events:
+            print(f"Listing {listing_id} is not in the database")
+            return 1
+        for event in events:
+            details = _format_details(event.details)
+            line = f"{_local(event.time)}  {event.listing_id:>11}  {event.event:<13}  {event.title}"
+            print(line + (f"  ({details})" if details else ""))
+        return 0
+    finally:
+        store.close()
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="shop-notify", description="Watch a shop for new listings and send notifications."
@@ -349,12 +501,25 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["run", "healthcheck", "test-notify"],
+        choices=["run", "healthcheck", "test-notify", "history"],
         default="run",
         help=(
             "run: poll the shop (default); healthcheck: exit 0 if the last poll was recent; "
-            "test-notify: send a sample notification to all targets"
+            "test-notify: send a sample notification to all targets; "
+            "history: show the recorded history of the listings"
         ),
+    )
+    parser.add_argument(
+        "listing_id", nargs="?", type=int, help="history only: show the history of this listing"
+    )
+    parser.add_argument(
+        "--since",
+        type=parse_since,
+        metavar="PERIOD",
+        help="history only: events of this period, e.g. 12h, 7d, 2w (default: 7d, polls: 1d)",
+    )
+    parser.add_argument(
+        "--polls", action="store_true", help="history only: show the polls instead of events"
     )
     parser.add_argument(
         "--url", help="test-notify only: send to this Apprise URL instead of the configured targets"
@@ -363,9 +528,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
     if args.url and args.command != "test-notify":
         parser.error("--url can only be used with test-notify")
+    history_args = args.listing_id is not None or args.since is not None or args.polls
+    if history_args and args.command != "history":
+        parser.error("a listing ID, --since and --polls can only be used with history")
+    if args.polls and args.listing_id is not None:
+        parser.error("--polls can't be combined with a listing ID")
 
     if args.command == "test-notify":
         raise SystemExit(test_notify(NotifySettings(), args.url))
+    if args.command == "history":
+        raise SystemExit(history(NotifySettings(), args.listing_id, args.since, polls=args.polls))
     settings = Settings()
     if args.command == "healthcheck":
         raise SystemExit(healthcheck(settings))

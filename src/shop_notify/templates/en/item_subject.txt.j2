@@ -1,1 +1,1 @@
-{% if test %}[Test] {% endif %}New in {{ shop_name or "the shop" }}: {{ item.title }}
+{% if test %}[Test] {% endif %}{{ "Back in" if item.back else "New in" }} {{ shop_name or "the shop" }}: {{ item.title }}
