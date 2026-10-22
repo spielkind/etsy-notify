@@ -1,6 +1,6 @@
 """SQLite storage of listings, their history and the polls.
 
-Schema version 1 (see ``docs/architecture.md`` for a diagram):
+Schema version 2 (see ``docs/architecture.md`` for a diagram):
 
 - ``listings``: one row per listing ever seen, with its latest state; rows are kept
   when a listing leaves the shop (``gone_since``).
@@ -23,7 +23,7 @@ from shop_notify.models import Back, Listing
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS listings (
@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS listings (
     missing_since INTEGER,
     gone_since    INTEGER,
     notified_date INTEGER,
+    filtered      INTEGER NOT NULL DEFAULT 0,
     back          TEXT,
     result        TEXT NOT NULL
 );
@@ -55,6 +56,7 @@ CREATE TABLE IF NOT EXISTS polls (
     back     INTEGER NOT NULL DEFAULT 0,
     missing  INTEGER NOT NULL DEFAULT 0,
     gone     INTEGER NOT NULL DEFAULT 0,
+    filtered INTEGER NOT NULL DEFAULT 0,
     error    TEXT
 );
 CREATE INDEX IF NOT EXISTS polls_time ON polls (time);
@@ -74,6 +76,9 @@ class SyncResult:
     back: int = 0
     missing: int = 0
     gone: list[Listing] = field(default_factory=list)
+    refilter: list[Listing] = field(default_factory=list)
+    """Listings in the shop that were filtered out before; checked again every poll."""
+    filtered: int = 0
 
 
 @dataclass(frozen=True)
@@ -95,6 +100,7 @@ class Poll:
     back: int
     missing: int
     gone: int
+    filtered: int
     error: str | None
 
 
@@ -137,6 +143,11 @@ class ListingStore:
         with self._db:
             if columns == _LEGACY_COLUMNS:
                 self._db.execute("ALTER TABLE listings RENAME TO listings_v0")
+            if version == 1:
+                for table in ("listings", "polls"):
+                    self._db.execute(
+                        f"ALTER TABLE {table} ADD COLUMN filtered INTEGER NOT NULL DEFAULT 0"
+                    )
             self._db.executescript(_SCHEMA)
             if columns == _LEGACY_COLUMNS:
                 self._db.execute(
@@ -167,10 +178,12 @@ class ListingStore:
         """Store the current listings and record what changed.
 
         Returns the listings to notify in the order given (Etsy: newest first),
-        followed by pending ones that are no longer listed. Listings missing from a
-        ``complete`` result are marked as missing; once they have not been seen for more
-        than ``forget_after`` seconds, they count as gone and are notified again if they
-        come back. An incomplete result never marks anything as missing or gone.
+        followed by pending ones that are no longer listed, and the listings that were
+        filtered out before, so that they can be checked against the filters again.
+        Listings missing from a ``complete`` result are marked as missing; once they have
+        not been seen for more than ``forget_after`` seconds, they count as gone and are
+        notified again if they come back. An incomplete result never marks anything as
+        missing or gone.
         """
         now = int(time.time())
         listings = list(listings)
@@ -202,6 +215,18 @@ class ListingStore:
                 item.back = Back.model_validate_json(back)
             result.pending.append(item)
         result.pending.sort(key=lambda item: position.get(item.listing_id, len(position)))
+        result.refilter = [
+            Listing.model_validate_json(row[0])
+            for row in self._db.execute(
+                """
+                SELECT result FROM listings
+                WHERE filtered = 1 AND notified_date IS NOT NULL AND last_seen = ?
+                ORDER BY listing_id
+                """,
+                (now,),
+            )
+        ]
+        result.refilter.sort(key=lambda item: position[item.listing_id])
         return result
 
     def _event(self, listing_id: int, now: int, event: str, **details: Any) -> None:
@@ -303,13 +328,28 @@ class ListingStore:
             for item in listings:
                 updated = self._db.execute(
                     """
-                    UPDATE listings SET notified_date = ?, back = NULL
-                    WHERE listing_id = ? AND notified_date IS NULL
+                    UPDATE listings SET notified_date = ?, filtered = 0, back = NULL
+                    WHERE listing_id = ? AND (notified_date IS NULL OR filtered = 1)
                     """,
                     (now, item.listing_id),
                 ).rowcount
                 if updated:
                     self._event(item.listing_id, now, "notified" if sent else "recorded")
+
+    def mark_as_filtered(self, listings: Iterable[tuple[Listing, str]]) -> None:
+        """Mark pending listings as filtered out, so they are not notified."""
+        now = int(time.time())
+        with self._db:
+            for item, reason in listings:
+                updated = self._db.execute(
+                    """
+                    UPDATE listings SET notified_date = ?, filtered = 1, back = NULL
+                    WHERE listing_id = ? AND notified_date IS NULL
+                    """,
+                    (now, item.listing_id),
+                ).rowcount
+                if updated:
+                    self._event(item.listing_id, now, "filtered", reason=reason)
 
     def record_poll(
         self,
@@ -327,8 +367,8 @@ class ListingStore:
             self._db.execute(
                 """
                 INSERT INTO polls (time, reported, received, complete, new, back, missing,
-                                   gone, error)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   gone, filtered, error)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     now,
@@ -339,6 +379,7 @@ class ListingStore:
                     result.back,
                     result.missing,
                     len(result.gone),
+                    result.filtered,
                     error,
                 ),
             )
@@ -379,6 +420,17 @@ class ListingStore:
             for row in self._db.execute(query, params)
         ]
 
+    def seen_since(self, since: float) -> list[Listing]:
+        """The latest state of the listings seen in the shop since ``since``, newest first."""
+        return [
+            Listing.model_validate_json(row[0])
+            for row in self._db.execute(
+                "SELECT result FROM listings WHERE last_seen >= ? "
+                "ORDER BY first_seen DESC, listing_id DESC",
+                (since,),
+            )
+        ]
+
     def polls(self, *, since: float = 0) -> list[Poll]:
         return [
             Poll(
@@ -390,11 +442,13 @@ class ListingStore:
                 back=row[5],
                 missing=row[6],
                 gone=row[7],
-                error=row[8],
+                filtered=row[8],
+                error=row[9],
             )
             for row in self._db.execute(
                 """
-                SELECT time, reported, received, complete, new, back, missing, gone, error
+                SELECT time, reported, received, complete, new, back, missing, gone, filtered,
+                       error
                 FROM polls WHERE time >= ? ORDER BY time, id
                 """,
                 (since,),

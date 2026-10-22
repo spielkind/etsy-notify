@@ -17,6 +17,7 @@ from shop_notify import __version__
 from shop_notify.config import NotifySettings, Settings
 from shop_notify.db import ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError, Quota
+from shop_notify.filters import Filters, Rule
 from shop_notify.models import Listing, Money
 from shop_notify.notifications import (
     AppriseNotifier,
@@ -341,6 +342,7 @@ def test_run_passes_settings_to_each_poll(
         "NOTIFY_EXISTING_ON_FIRST_RUN": "true",
         "FORGET_AFTER_HOURS": "2.5",
         "NOTIFY_BACK": "false",
+        "NOTIFY_EXCLUDE_REGEX": r"^reserved\b",
     }.items():
         monkeypatch.setenv(key, value)
     route = respx.get(f"{BASE}shops/42/listings/active").mock(
@@ -357,7 +359,11 @@ def test_run_passes_settings_to_each_poll(
     with patch.object(cli, "run_once", fake_run_once):
         cli.main([])
 
-    assert calls == [{"notify_existing": True, "notify_back": False, "forget_after_hours": 2.5}]
+    [kwargs] = calls
+    filters = kwargs.pop("filters")
+    assert kwargs == {"notify_existing": True, "notify_back": False, "forget_after_hours": 2.5}
+    assert isinstance(filters, Filters)
+    assert filters.describe() == [r"exclude regex '^reserved\b'"]
     assert route.calls[0].request.headers["x-api-key"] == "key:secret"
 
 
@@ -865,3 +871,142 @@ def test_parse_since() -> None:
     assert cli.parse_since("30m") == 1800
     assert cli.parse_since("12h") == 12 * 3600
     assert cli.parse_since("2w") == 14 * 86400
+
+
+# --- filters -------------------------------------------------------------------
+
+
+def test_run_once_filters_items_and_rechecks_them(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    client = _client()
+    client.listing_images.return_value = {}
+    store = ListingStore(":memory:")
+    notifier = RecordingNotifier()
+    filters = Filters(exclude=(Rule.regex(r"^reserved\b"),))
+    client.active_listings.return_value = [make_listing(1)]
+    cli.run_once(client, store, notifier, 42, filters=filters)  # first run
+
+    reserved = make_listing(2).model_copy(update={"title": "Reserved listing for Martin"})
+    client.active_listings.return_value = [reserved, make_listing(3), make_listing(1)]
+    assert cli.run_once(client, store, notifier, 42, filters=filters) == 1
+    assert notifier.calls[-1] == [3]
+    assert (
+        "Filtered (exclude regex '^reserved\\b'): Reserved listing for Martin "
+        "(https://www.etsy.com/listing/2)" in caplog.text
+    )
+    assert store.polls()[-1].filtered == 1
+
+    # still reserved: nothing happens
+    assert cli.run_once(client, store, notifier, 42, filters=filters) == 0
+    # the title changes, so it passes now
+    client.active_listings.return_value = [make_listing(2), make_listing(3), make_listing(1)]
+    assert cli.run_once(client, store, notifier, 42, filters=filters) == 1
+    assert notifier.calls[-1] == [2]
+    assert "Now passes the filters: Item 2" in caplog.text
+    assert cli.run_once(client, store, notifier, 42, filters=filters) == 0
+    store.close()
+
+
+def test_run_once_without_filters_notifies_previously_filtered_items() -> None:
+    client = _client()
+    client.listing_images.return_value = {}
+    store = ListingStore(":memory:")
+    notifier = RecordingNotifier()
+    client.active_listings.return_value = [make_listing(1)]
+    cli.run_once(client, store, notifier, 42)
+    client.active_listings.return_value = [make_listing(2), make_listing(1)]
+    cli.run_once(client, store, notifier, 42, filters=Filters(exclude=(Rule.keyword("2"),)))
+    assert len(notifier.calls) == 1
+
+    assert cli.run_once(client, store, notifier, 42) == 1
+    assert notifier.calls[-1] == [2]
+    store.close()
+
+
+def test_load_filters(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    assert not cli.load_filters(NotifySettings()).active
+    assert "Filters:" not in caplog.text
+
+    monkeypatch.setenv("NOTIFY_EXCLUDE", "reserved")
+    monkeypatch.setenv("NOTIFY_MAX_PRICE", "50")
+    assert cli.load_filters(NotifySettings()).active
+    assert "Filters: exclude keyword 'reserved'; price <= 50" in caplog.text
+
+    monkeypatch.setenv("NOTIFY_EXCLUDE_REGEX", "(")
+    with pytest.raises(SystemExit, match="Invalid filter configuration: environment: invalid"):
+        cli.load_filters(NotifySettings())
+
+
+def test_check_filters_title(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("NOTIFY_EXCLUDE_REGEX", r"^reserved\b")
+    monkeypatch.setenv("NOTIFY_MAX_PRICE", "50")
+    for argv, line in [
+        (["Reserved listing for Martin"], "filtered  Reserved listing for Martin  <- exclude"),
+        (["Mug", "--price", "60"], "filtered  Mug (60)  <- price 60 above maximum 50"),
+        (["Mug", "--price", "20"], "notify    Mug (20)"),
+    ]:
+        with pytest.raises(SystemExit) as exit_info:
+            cli.main(["check-filters", *argv])
+        assert exit_info.value.code == 0
+        out = capsys.readouterr().out
+        assert out.startswith("Filters: exclude regex '^reserved\\b'; price <= 50\n")
+        assert line in out
+
+
+def test_check_filters_without_filters(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["check-filters", "Mug"])
+    assert "Filters: none - every item is notified" in capsys.readouterr().out
+
+
+def test_check_filters_history(
+    history_db: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("NOTIFY_MAX_PRICE", "1")
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["check-filters", "--since", "2h"])
+    assert exit_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "filtered  Item 1 (5.00 EUR)  <- price 5 above maximum 1" in out
+    assert out.endswith("0 of 1 item(s) would be notified\n")
+
+    monkeypatch.setenv("NOTIFY_MAX_PRICE", "")
+    with pytest.raises(SystemExit):
+        cli.main(["check-filters", "--since", "1m"])
+    assert capsys.readouterr().out.endswith("0 of 0 item(s) would be notified\n")
+
+
+def test_check_filters_errors(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["check-filters", "--since", "1d"])
+    assert exit_info.value.code == 1
+    assert "No database at shop-notify.db" in capsys.readouterr().out
+
+    monkeypatch.setenv("NOTIFY_INCLUDE_REGEX", "[")
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["check-filters", "Mug"])
+    assert exit_info.value.code == 1
+    assert "Invalid filter configuration: environment:" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("argv", "error"),
+    [
+        (["check-filters"], "check-filters needs either a title or --since"),
+        (["check-filters", "Mug", "--since", "1d"], "needs either a title or --since"),
+        (["history", "--price", "3"], "--price can only be used with check-filters"),
+        (["history", "abc"], "invalid listing ID 'abc'"),
+        (["run", "Mug"], "can only be used with history or check-filters"),
+    ],
+)
+def test_check_filters_argument_errors(
+    argv: list[str], error: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(argv)
+    assert error in capsys.readouterr().err

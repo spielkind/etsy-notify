@@ -4,6 +4,7 @@
 #
 #   1. first run: the existing listings are recorded, no mail is sent
 #   2. a new listing appears: exactly one HTML mail with title, price and image
+#   2b. a new "Reserved listing for …" is held back by NOTIFY_EXCLUDE_REGEX: no mail
 #   3. further polls, one of them without an old listing (gap in Etsy's index):
 #      no duplicate mail, nothing gone
 #   4. an old listing is gone for longer than FORGET_AFTER_HOURS and comes back with a
@@ -44,10 +45,14 @@ wait_for() {
   return 1
 }
 
+# log_has PATTERN – the shop-notify log contains PATTERN (read completely first: with
+# pipefail, "docker logs | grep -q" fails when grep exits early)
+log_has() { local log; log=$(docker logs shop-notify-e2e 2>&1); grep -q -- "$1" <<<"$log"; }
+
 mail_count() { curl -sf "$MAILPIT_API/messages" | jq -r .total; }
 one_mail() { [[ $(mail_count) == 1 ]]; }
 two_mails() { [[ $(mail_count) == 2 ]]; }
-first_run_logged() { docker logs shop-notify-e2e 2>&1 | grep -q "First run: 3 existing item"; }
+first_run_logged() { log_has "First run: 3 existing item"; }
 
 # check_mail JQ_FILTER MESSAGE – the filter must be true for the received mail
 check_mail() { jq -e "$1" "$MAIL" >/dev/null || fail "$2"; }
@@ -64,6 +69,7 @@ docker run -d --name shop-notify-e2e --network host \
   -e ETSY_API_KEY=e2e-key -e ETSY_SHARED_SECRET=e2e-secret \
   -e ETSY_API_ENDPOINT="http://localhost:$ETSY_PORT/v3/application/" \
   -e ETSY_SHOP_NAME=TestShop -e POLL_INTERVAL=10 -e FORGET_AFTER_HOURS=0.01 \
+  -e 'NOTIFY_EXCLUDE_REGEX=^reserved\b' \
   -e NOTIFY_URLS="$MAIL_URL" \
   "$IMAGE" >/dev/null
 
@@ -84,17 +90,27 @@ check_mail '.HTML | contains("12.54")' "price missing"
 check_mail '(.HTML | contains("image.png")) or ((.Inline // []) | length > 0) or ((.Attachments // []) | length > 0)' "image missing"
 check_mail '.HTML | contains("Handmade test item 3") | not' "old listing included"
 
+echo "2b. a reserved listing is filtered"
+curl -sf -X POST "http://localhost:$ETSY_PORT/_add_reserved" >/dev/null
+reserved_filtered() {
+  log_has "Filtered (exclude regex '^reserved.b'): Reserved listing for Martin"
+}
+wait_for 30 reserved_filtered || fail "reserved listing was not filtered"
+[[ $(mail_count) == 1 ]] || fail "mail sent for a reserved listing"
+docker exec shop-notify-e2e shop-notify history --polls | grep -q "1 filtered" \
+  || fail "filtered listing not counted in the poll history"
+
 echo "3. no duplicate on the next polls, even if a listing is briefly missing"
 curl -sf -X POST "http://localhost:$ETSY_PORT/_hide_once" >/dev/null
 sleep 25
 [[ $(mail_count) == 1 ]] || fail "duplicate mail"
-docker logs shop-notify-e2e 2>&1 | grep -q "No new items this time" || fail "no further poll logged"
-docker logs shop-notify-e2e 2>&1 | grep -q "No longer in the shop" && fail "briefly missing listing is gone"
+log_has "No new items this time" || fail "no further poll logged"
+log_has "No longer in the shop" && fail "briefly missing listing is gone"
 
 echo "4. a listing that was gone is notified as back, with its old price"
 curl -sf -X POST "http://localhost:$ETSY_PORT/_hide_for/50" >/dev/null
 wait_for 90 two_mails || fail "no mail for the listing back in the shop"
-docker logs shop-notify-e2e 2>&1 | grep -q "No longer in the shop: Handmade test item 1" \
+log_has "No longer in the shop: Handmade test item 1" \
   || fail "listing was not marked as gone"
 id=$(curl -sf "$MAILPIT_API/messages" | jq -r '.messages[0].ID')
 curl -sf "$MAILPIT_API/message/$id" > "$MAIL"

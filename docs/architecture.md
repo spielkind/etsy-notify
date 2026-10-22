@@ -15,11 +15,12 @@ All modules are in [`src/shop_notify/`](../src/shop_notify):
 
 | Module | Responsibility |
 |---|---|
-| `__main__.py` | Command line (`run`, `healthcheck`, `test-notify`, `history`), logging, the poll loop (`run_once`), first-run handling, quota warning, signal handling |
+| `__main__.py` | Command line (`run`, `healthcheck`, `test-notify`, `history`, `check-filters`), logging, the poll loop (`run_once`), first-run handling, quota warning, signal handling |
 | `config.py` | Settings from environment variables and `.env` ([pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/)); credentials are `SecretStr` and never printed |
 | `etsy.py` | `EtsyClient`: HTTP client for the Etsy Open API v3 ([httpx](https://www.python-httpx.org/)) with pagination, retries when rate limited, quota tracking; validates every response |
 | `models.py` | `Listing` and `Money` – the only listing fields that are used and stored |
 | `db.py` | `ListingStore`: SQLite database of all listings, their history and the polls, with automatic schema migration (see [Database](#database)) |
+| `filters.py` | `Filters`: include/exclude rules (keywords, regular expressions) and price limits from `.env` and `filters.yml` (see [filters.md](filters.md)) |
 | `notifications.py` | `MessageRenderer` (Jinja templates, en/de, plain text and HTML), `AppriseNotifier` (e-mail: one HTML mail; push/chat: one message per item with image), `ConsoleNotifier` |
 | `systemd.py` | `sd_notify` messages (ready, watchdog, status) when running as a systemd service |
 | `templates/` | Built-in message templates per language; can be replaced with `NOTIFY_TEMPLATE_DIR` |
@@ -39,13 +40,16 @@ All modules are in [`src/shop_notify/`](../src/shop_notify):
    - Etsy's count of listings is sometimes ahead of the list it returns. Such an
      incomplete response doesn't mark anything as missing; it is logged, with a warning
      after one hour, and processed anyway after `FORGET_AFTER_HOURS`.
-3. On the first run (empty database) the new listings are only recorded and printed to
+3. The listings to notify pass through the [filters](filters.md). Those that don't
+   are marked as *filtered*; while they are in the shop they are checked again on
+   every poll and notified once they pass (e.g. after a title change).
+4. On the first run (empty database) the new listings are only recorded and printed to
    the console.
-4. Otherwise the main image of each new listing is fetched
+5. Otherwise the main image of each new listing is fetched
    (`EtsyClient.listing_images`), the notification is rendered and sent to every
    target. Only after that are the listings marked as notified – if sending fails, they
    are sent again with the next poll.
-5. The poll is recorded (counts, completeness, changes, errors), and a heartbeat file is updated (`healthcheck`) and, under systemd, the watchdog is
+6. The poll is recorded (counts, completeness, changes, errors), and a heartbeat file is updated (`healthcheck`) and, under systemd, the watchdog is
    notified. The process waits `POLL_INTERVAL` seconds and starts again.
 
 The life cycle of a listing:
@@ -70,6 +74,7 @@ erDiagram
         INTEGER missing_since "not returned since (complete polls), else NULL"
         INTEGER gone_since "missing for longer than FORGET_AFTER_HOURS, else NULL"
         INTEGER notified_date "NULL while a notification is pending"
+        INTEGER filtered "1 if held back by the filters"
         TEXT back "last seen and previous price while 'back' is pending (JSON)"
         TEXT result "latest state: title, URL, price, Etsy timestamps (JSON)"
     }
@@ -90,6 +95,7 @@ erDiagram
         INTEGER back
         INTEGER missing
         INTEGER gone
+        INTEGER filtered
         TEXT error "set for failed polls"
     }
 ```
@@ -103,13 +109,15 @@ All times are Unix timestamps (UTC). Events:
 | `notified` / `recorded` | notification sent / only recorded (first run, `NOTIFY_BACK=false`) | – |
 | `missing` | came back within `FORGET_AFTER_HOURS` | `since` (last seen), `seconds` missing |
 | `gone` | missing for longer than `FORGET_AFTER_HOURS` | – |
+| `filtered` | held back by the filters | `reason`, e.g. `exclude regex '^reserved\b'` |
 | `back` | came back after being gone | `last_seen` |
 | `price_changed`, `title_changed` | price or title differs from the last poll | `old`, `new` |
 
 **Migrations:** the schema version is stored in `PRAGMA user_version`. On startup an older
 database is upgraded automatically after a backup copy (`<DB_PATH>.bak-v<version>`) was
-made; a database of a newer version is refused. Version 1 replaced the table of 1.0
-(`listing_id`, `request_date`, `notified_date`, `result`).
+made; a database of a newer version is refused. Version 1 (Shop Notify 1.1) replaced the
+table of 1.0 (`listing_id`, `request_date`, `notified_date`, `result`); version 2
+(Shop Notify 1.2) added the `filtered` columns.
 
 ## External interfaces and trust boundaries
 

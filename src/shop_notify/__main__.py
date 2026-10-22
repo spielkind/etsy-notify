@@ -6,13 +6,16 @@ import threading
 import time
 from collections.abc import Sequence
 from datetime import datetime
+from decimal import Decimal
 from types import FrameType
 from typing import TypedDict
 
 from shop_notify import __version__
 from shop_notify.config import NotifySettings, Settings
-from shop_notify.db import ListingStore
+from shop_notify.db import ListingStore, SyncResult
 from shop_notify.etsy import EtsyClient, EtsyError
+from shop_notify.filters import FilterError, Filters
+from shop_notify.filters import split as split_listings
 from shop_notify.models import Listing, Money
 from shop_notify.notifications import (
     AppriseNotifier,
@@ -92,6 +95,16 @@ def build_notifier(settings: Settings) -> Notifier:
     return notifier
 
 
+def load_filters(settings: NotifySettings) -> Filters:
+    try:
+        filters = settings.filters()
+    except FilterError as e:
+        raise SystemExit(f"Invalid filter configuration: {e}") from e
+    if filters.active:
+        log.info("Filters: %s", "; ".join(filters.describe()))
+    return filters
+
+
 def resolve_shop_id(client: EtsyClient, settings: Settings) -> int:
     if settings.etsy_shop_id is not None:
         return settings.etsy_shop_id
@@ -169,6 +182,29 @@ def listings_complete(client: EtsyClient, store: ListingStore, forget_after: flo
     return False
 
 
+def select_to_notify(
+    store: ListingStore, result: SyncResult, *, notify_back: bool, filters: Filters | None
+) -> list[Listing]:
+    """The pending listings that are notified; the others are recorded as skipped."""
+    pending = result.pending
+    if not notify_back:
+        skipped = [item for item in pending if item.back]
+        store.mark_as_notified(skipped, sent=False)
+        for item in skipped:
+            log.info("Back in the shop (not notified): %s (%s)", item.title, item.url)
+        pending = [item for item in pending if not item.back]
+    filters = filters or Filters()
+    pending, filtered = split_listings(filters, pending)
+    store.mark_as_filtered(filtered)
+    result.filtered = len(filtered)
+    for item, reason in filtered:
+        log.info("Filtered (%s): %s (%s)", reason, item.title, item.url)
+    passing = [item for item in result.refilter if filters.check(item).passed]
+    for item in passing:
+        log.info("Now passes the filters: %s (%s)", item.title, item.url)
+    return pending + passing
+
+
 def run_once(
     client: EtsyClient,
     store: ListingStore,
@@ -178,12 +214,16 @@ def run_once(
     notify_existing: bool = False,
     notify_back: bool = True,
     forget_after_hours: float = 24,
+    filters: Filters | None = None,
 ) -> int:
     """Poll once and notify new items and items back in the shop.
 
     Returns the number of notified items. On the first run (empty database) the
     existing items are only recorded unless ``notify_existing`` is set; notifiers still
-    receive them flagged as ``initial``. Every poll is recorded, including failed ones.
+    receive them flagged as ``initial``. Items that don't pass the ``filters`` are
+    recorded as filtered and checked again in every poll while they are in the shop, so
+    they are notified once they pass (e.g. after a title change). Every poll is
+    recorded, including failed ones.
     """
     try:
         listings = list(client.active_listings(shop_id))
@@ -202,13 +242,7 @@ def run_once(
     )
     for item in result.gone:
         log.info("No longer in the shop: %s (%s)", item.title, item.url)
-    pending = result.pending
-    if not notify_back:
-        skipped = [item for item in pending if item.back]
-        store.mark_as_notified(skipped, sent=False)
-        for item in skipped:
-            log.info("Back in the shop (not notified): %s (%s)", item.title, item.url)
-        pending = [item for item in pending if not item.back]
+    pending = select_to_notify(store, result, notify_back=notify_back, filters=filters)
 
     error = None
     try:
@@ -289,6 +323,7 @@ def run(settings: Settings) -> None:
     setup_logging(settings)
     log.info("Shop Notify %s starting", __version__)
     notifier = build_notifier(settings)
+    filters = load_filters(settings)
     systemd = SystemdNotifier()
 
     stop = threading.Event()
@@ -319,6 +354,7 @@ def run(settings: Settings) -> None:
                         notify_existing=settings.notify_existing_on_first_run,
                         notify_back=settings.notify_back,
                         forget_after_hours=settings.forget_after_hours,
+                        filters=filters,
                     )
                     settings.heartbeat_path.touch()
                     systemd.status(f"Last poll {_now()}: {new} new item(s){_quota_status(client)}")
@@ -474,6 +510,7 @@ def history(
                         "back": poll.back,
                         "missing": poll.missing,
                         "gone": poll.gone,
+                        "filtered": poll.filtered,
                     }
                     line += "".join(f", {n} {k}" for k, n in changes.items() if n)
                 print(f"{_local(poll.time)}  {line}")
@@ -494,6 +531,59 @@ def history(
         store.close()
 
 
+def check_filters(
+    settings: NotifySettings,
+    title: str | None = None,
+    price: Decimal | None = None,
+    since: float | None = None,
+) -> int:
+    """Show whether a title, or the titles seen in a period, pass the configured filters."""
+    try:
+        filters = settings.filters()
+    except FilterError as e:
+        print(f"Invalid filter configuration: {e}")
+        return 1
+    print("Filters: " + ("; ".join(filters.describe()) or "none - every item is notified"))
+    if title is not None:
+        checks = [(title, price, None if price is None else str(price))]
+    else:
+        if not settings.db_path.is_file():
+            print(f"No database at {settings.db_path} - has Shop Notify run yet?")
+            return 1
+        store = ListingStore(settings.db_path)
+        try:
+            listings = store.seen_since(time.time() - (since or 0))
+        finally:
+            store.close()
+        checks = [
+            (item.title, item.price.value, str(item.price))
+            if item.price
+            else (item.title, None, None)
+            for item in listings
+        ]
+    passed = 0
+    for text, value, label in checks:
+        decision = filters.check_title(text, value)
+        passed += decision.passed
+        shown = f"{text} ({label})" if label else text
+        if decision.passed:
+            print(f"  notify    {shown}")
+        else:
+            print(f"  filtered  {shown}  <- {decision.reason}")
+    if title is None:
+        print(f"{passed} of {len(checks)} item(s) would be notified")
+    return 0
+
+
+COMMANDS = {
+    "run": "poll the shop (default)",
+    "healthcheck": "exit 0 if the last poll was recent",
+    "test-notify": "send a sample notification to all targets",
+    "history": "show the recorded history of the listings",
+    "check-filters": "show which titles the configured filters let through",
+}
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="shop-notify", description="Watch a shop for new listings and send notifications."
@@ -501,45 +591,64 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["run", "healthcheck", "test-notify", "history"],
+        choices=list(COMMANDS),
         default="run",
-        help=(
-            "run: poll the shop (default); healthcheck: exit 0 if the last poll was recent; "
-            "test-notify: send a sample notification to all targets; "
-            "history: show the recorded history of the listings"
-        ),
+        help="; ".join(f"{name}: {text}" for name, text in COMMANDS.items()),
     )
     parser.add_argument(
-        "listing_id", nargs="?", type=int, help="history only: show the history of this listing"
+        "argument",
+        nargs="?",
+        metavar="LISTING_ID | TITLE",
+        help="history: show the history of this listing; check-filters: check this title",
     )
     parser.add_argument(
         "--since",
         type=parse_since,
         metavar="PERIOD",
-        help="history only: events of this period, e.g. 12h, 7d, 2w (default: 7d, polls: 1d)",
+        help=(
+            "history: events of this period, e.g. 12h, 7d, 2w (default: 7d, polls: 1d); "
+            "check-filters: check the titles of the listings seen in this period"
+        ),
     )
     parser.add_argument(
         "--polls", action="store_true", help="history only: show the polls instead of events"
+    )
+    parser.add_argument(
+        "--price", type=Decimal, help="check-filters only: price of the title to check"
     )
     parser.add_argument(
         "--url", help="test-notify only: send to this Apprise URL instead of the configured targets"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     args = parser.parse_args(argv)
-    if args.url and args.command != "test-notify":
+    command = args.command
+    if args.url and command != "test-notify":
         parser.error("--url can only be used with test-notify")
-    history_args = args.listing_id is not None or args.since is not None or args.polls
-    if history_args and args.command != "history":
-        parser.error("a listing ID, --since and --polls can only be used with history")
-    if args.polls and args.listing_id is not None:
-        parser.error("--polls can't be combined with a listing ID")
+    if args.polls and command != "history":
+        parser.error("--polls can only be used with history")
+    if args.price is not None and command != "check-filters":
+        parser.error("--price can only be used with check-filters")
+    uses_argument = args.argument is not None or args.since is not None
+    if uses_argument and command not in ("history", "check-filters"):
+        parser.error(
+            "a listing ID, a title or --since can only be used with history or check-filters"
+        )
 
-    if args.command == "test-notify":
+    if command == "test-notify":
         raise SystemExit(test_notify(NotifySettings(), args.url))
-    if args.command == "history":
-        raise SystemExit(history(NotifySettings(), args.listing_id, args.since, polls=args.polls))
+    if command == "history":
+        if args.polls and args.argument is not None:
+            parser.error("--polls can't be combined with a listing ID")
+        if args.argument is not None and not args.argument.isdigit():
+            parser.error(f"invalid listing ID {args.argument!r}")
+        listing_id = int(args.argument) if args.argument is not None else None
+        raise SystemExit(history(NotifySettings(), listing_id, args.since, polls=args.polls))
+    if command == "check-filters":
+        if (args.argument is None) == (args.since is None):
+            parser.error("check-filters needs either a title or --since")
+        raise SystemExit(check_filters(NotifySettings(), args.argument, args.price, args.since))
     settings = Settings()
-    if args.command == "healthcheck":
+    if command == "healthcheck":
         raise SystemExit(healthcheck(settings))
     run(settings)
 

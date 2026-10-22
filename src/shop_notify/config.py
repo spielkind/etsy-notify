@@ -1,8 +1,11 @@
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from shop_notify.filters import Filters
 
 
 class NotifySettings(BaseSettings):
@@ -35,12 +38,38 @@ class NotifySettings(BaseSettings):
     # Above notify_images_max: attach the images to the summary message (Telegram album)
     notify_images_in_summary: bool = False
 
-    @field_validator("log_file", "notify_config", "notify_template_dir", mode="before")
+    # Filters (see docs/filters.md): keywords are comma-separated, each regex is one
+    # pattern (use | for alternatives); all are case-insensitive and match the title
+    notify_include: str | None = None
+    notify_exclude: str | None = None
+    notify_include_regex: str | None = None
+    notify_exclude_regex: str | None = None
+    notify_min_price: Decimal | None = None
+    notify_max_price: Decimal | None = None
+    # YAML file with any number of filters, merged with the ones above
+    filter_config: Path | None = None
+
+    @field_validator(
+        "log_file",
+        "notify_config",
+        "notify_template_dir",
+        "filter_config",
+        "notify_min_price",
+        "notify_max_price",
+        mode="before",
+    )
     @classmethod
     def _empty_path_is_none(cls, value: object) -> object:
         return None if value == "" else value
 
-    @field_validator("notify_urls", mode="before")
+    @field_validator(
+        "notify_urls",
+        "notify_include",
+        "notify_exclude",
+        "notify_include_regex",
+        "notify_exclude_regex",
+        mode="before",
+    )
     @classmethod
     def _empty_urls_is_none(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
@@ -49,6 +78,18 @@ class NotifySettings(BaseSettings):
     @classmethod
     def _normalize_console(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
+
+    def filters(self) -> Filters:
+        """The configured filters; raises ``FilterError`` if they are invalid."""
+        return Filters.from_settings(
+            include=self.notify_include,
+            exclude=self.notify_exclude,
+            include_regex=self.notify_include_regex,
+            exclude_regex=self.notify_exclude_regex,
+            min_price=self.notify_min_price,
+            max_price=self.notify_max_price,
+            config=self.filter_config,
+        )
 
     @property
     def has_notify_targets(self) -> bool:
