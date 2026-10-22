@@ -45,10 +45,14 @@ wait_for() {
   return 1
 }
 
+# log_has PATTERN – the shop-notify log contains PATTERN (read completely first: with
+# pipefail, "docker logs | grep -q" fails when grep exits early)
+log_has() { local log; log=$(docker logs shop-notify-e2e 2>&1); grep -q -- "$1" <<<"$log"; }
+
 mail_count() { curl -sf "$MAILPIT_API/messages" | jq -r .total; }
 one_mail() { [[ $(mail_count) == 1 ]]; }
 two_mails() { [[ $(mail_count) == 2 ]]; }
-first_run_logged() { docker logs shop-notify-e2e 2>&1 | grep -q "First run: 3 existing item"; }
+first_run_logged() { log_has "First run: 3 existing item"; }
 
 # check_mail JQ_FILTER MESSAGE – the filter must be true for the received mail
 check_mail() { jq -e "$1" "$MAIL" >/dev/null || fail "$2"; }
@@ -89,7 +93,7 @@ check_mail '.HTML | contains("Handmade test item 3") | not' "old listing include
 echo "2b. a reserved listing is filtered"
 curl -sf -X POST "http://localhost:$ETSY_PORT/_add_reserved" >/dev/null
 reserved_filtered() {
-  docker logs shop-notify-e2e 2>&1 | grep -q "Filtered (exclude regex '^reserved.b'): Reserved listing for Martin"
+  log_has "Filtered (exclude regex '^reserved.b'): Reserved listing for Martin"
 }
 wait_for 30 reserved_filtered || fail "reserved listing was not filtered"
 [[ $(mail_count) == 1 ]] || fail "mail sent for a reserved listing"
@@ -100,13 +104,13 @@ echo "3. no duplicate on the next polls, even if a listing is briefly missing"
 curl -sf -X POST "http://localhost:$ETSY_PORT/_hide_once" >/dev/null
 sleep 25
 [[ $(mail_count) == 1 ]] || fail "duplicate mail"
-docker logs shop-notify-e2e 2>&1 | grep -q "No new items this time" || fail "no further poll logged"
-docker logs shop-notify-e2e 2>&1 | grep -q "No longer in the shop" && fail "briefly missing listing is gone"
+log_has "No new items this time" || fail "no further poll logged"
+log_has "No longer in the shop" && fail "briefly missing listing is gone"
 
 echo "4. a listing that was gone is notified as back, with its old price"
 curl -sf -X POST "http://localhost:$ETSY_PORT/_hide_for/50" >/dev/null
 wait_for 90 two_mails || fail "no mail for the listing back in the shop"
-docker logs shop-notify-e2e 2>&1 | grep -q "No longer in the shop: Handmade test item 1" \
+log_has "No longer in the shop: Handmade test item 1" \
   || fail "listing was not marked as gone"
 id=$(curl -sf "$MAILPIT_API/messages" | jq -r '.messages[0].ID')
 curl -sf "$MAILPIT_API/message/$id" > "$MAIL"
