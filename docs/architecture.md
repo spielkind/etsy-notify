@@ -15,11 +15,11 @@ All modules are in [`src/shop_notify/`](../src/shop_notify):
 
 | Module | Responsibility |
 |---|---|
-| `__main__.py` | Command line (`run`, `healthcheck`, `test-notify`), logging, the poll loop (`run_once`), first-run handling, quota warning, signal handling |
+| `__main__.py` | Command line (`run`, `healthcheck`, `test-notify`, `history`), logging, the poll loop (`run_once`), first-run handling, quota warning, signal handling |
 | `config.py` | Settings from environment variables and `.env` ([pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/)); credentials are `SecretStr` and never printed |
 | `etsy.py` | `EtsyClient`: HTTP client for the Etsy Open API v3 ([httpx](https://www.python-httpx.org/)) with pagination, retries when rate limited, quota tracking; validates every response |
 | `models.py` | `Listing` and `Money` – the only listing fields that are used and stored |
-| `db.py` | `ListingStore`: SQLite database of known listings and whether they were notified |
+| `db.py` | `ListingStore`: SQLite database of all listings, their history and the polls, with automatic schema migration (see [Database](#database)) |
 | `notifications.py` | `MessageRenderer` (Jinja templates, en/de, plain text and HTML), `AppriseNotifier` (e-mail: one HTML mail; push/chat: one message per item with image), `ConsoleNotifier` |
 | `systemd.py` | `sd_notify` messages (ready, watchdog, status) when running as a systemd service |
 | `templates/` | Built-in message templates per language; can be replaced with `NOTIFY_TEMPLATE_DIR` |
@@ -29,26 +29,87 @@ All modules are in [`src/shop_notify/`](../src/shop_notify):
 1. `EtsyClient.active_listings` fetches all active listings of the shop, newest first,
    page by page. Each listing is validated on its own; invalid ones are logged and
    skipped.
-2. `ListingStore.sync` stores the current listings and returns those that were not
-   notified yet. Notified listings that have been missing for `FORGET_AFTER_HOURS`
-   (24 h) are forgotten, so a listing that comes back later is notified again; shorter
-   gaps in Etsy's listing index don't cause notifications. If Etsy returns fewer
-   listings than it counts, nothing is forgotten in that poll.
+2. `ListingStore.sync` stores the current listings, records changes of price and title
+   and returns the listings to notify: new ones, those back in the shop and earlier ones
+   whose notification failed.
+   - A notified listing that is missing from a complete response is marked as
+     *missing*; if it comes back before `FORGET_AFTER_HOURS` (24 h) nothing is sent.
+   - After that it counts as *gone*. If it comes back later, it is notified as *back in
+     the shop* with its previous price and when it was last seen (`NOTIFY_BACK`).
+   - Etsy's count of listings is sometimes ahead of the list it returns. Such an
+     incomplete response doesn't mark anything as missing; it is logged, with a warning
+     after one hour, and processed anyway after `FORGET_AFTER_HOURS`.
 3. On the first run (empty database) the new listings are only recorded and printed to
    the console.
 4. Otherwise the main image of each new listing is fetched
    (`EtsyClient.listing_images`), the notification is rendered and sent to every
    target. Only after that are the listings marked as notified – if sending fails, they
    are sent again with the next poll.
-5. A heartbeat file is updated (`healthcheck`) and, under systemd, the watchdog is
+5. The poll is recorded (counts, completeness, changes, errors), and a heartbeat file is updated (`healthcheck`) and, under systemd, the watchdog is
    notified. The process waits `POLL_INTERVAL` seconds and starts again.
 
 The life cycle of a listing:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="lifecycle-dark.svg">
-  <img alt="Lifecycle of a listing: New, then Notified once sent, then Forgotten once it has been gone from the shop for 24 hours; if it re-appears it is New again. Failed notifications are retried with the next poll." src="lifecycle-light.svg">
+  <img alt="Lifecycle of a listing: New, then Notified once sent, then Gone once it has been gone from the shop for 24 hours; if it comes back it is notified as back in the shop. Failed notifications are retried with the next poll." src="lifecycle-light.svg">
 </picture>
+
+## Database
+
+A single SQLite file (`DB_PATH`). Listings are never deleted, events are only appended;
+polls are kept for `POLL_HISTORY_DAYS`. `shop-notify history` shows the content.
+
+```mermaid
+erDiagram
+    listings ||--o{ listing_events : has
+    listings {
+        INTEGER listing_id PK "Etsy listing ID"
+        INTEGER first_seen "first poll that returned it"
+        INTEGER last_seen "last poll that returned it"
+        INTEGER missing_since "not returned since (complete polls), else NULL"
+        INTEGER gone_since "missing for longer than FORGET_AFTER_HOURS, else NULL"
+        INTEGER notified_date "NULL while a notification is pending"
+        TEXT back "last seen and previous price while 'back' is pending (JSON)"
+        TEXT result "latest state: title, URL, price, Etsy timestamps (JSON)"
+    }
+    listing_events {
+        INTEGER id PK
+        INTEGER listing_id FK
+        INTEGER time
+        TEXT event
+        TEXT details "JSON, depends on the event"
+    }
+    polls {
+        INTEGER id PK
+        INTEGER time
+        INTEGER reported "active listings according to Etsy"
+        INTEGER received "distinct listings actually returned"
+        INTEGER complete
+        INTEGER new
+        INTEGER back
+        INTEGER missing
+        INTEGER gone
+        TEXT error "set for failed polls"
+    }
+```
+
+All times are Unix timestamps (UTC). Events:
+
+| Event | When | Details |
+|---|---|---|
+| `new` | first seen | price and Etsy's timestamps: `created`, `renewed`, `active_since`, `modified` |
+| `imported` | taken over from a database of version 1.0 | – |
+| `notified` / `recorded` | notification sent / only recorded (first run, `NOTIFY_BACK=false`) | – |
+| `missing` | came back within `FORGET_AFTER_HOURS` | `since` (last seen), `seconds` missing |
+| `gone` | missing for longer than `FORGET_AFTER_HOURS` | – |
+| `back` | came back after being gone | `last_seen` |
+| `price_changed`, `title_changed` | price or title differs from the last poll | `old`, `new` |
+
+**Migrations:** the schema version is stored in `PRAGMA user_version`. On startup an older
+database is upgraded automatically after a backup copy (`<DB_PATH>.bak-v<version>`) was
+made; a database of a newer version is refused. Version 1 replaced the table of 1.0
+(`listing_id`, `request_date`, `notified_date`, `result`).
 
 ## External interfaces and trust boundaries
 

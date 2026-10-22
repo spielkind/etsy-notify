@@ -12,6 +12,7 @@ class NotifySettings(BaseSettings):
 
     etsy_shop_name: str | None = None
 
+    db_path: Path = Path("shop-notify.db")
     log_file: Path | None = Path("shop-notify.log")
     log_level: str = "INFO"
 
@@ -22,6 +23,8 @@ class NotifySettings(BaseSettings):
     notify_console: Literal["auto"] | bool = "auto"
     # On the first run (empty database) existing items are only recorded, not notified
     notify_existing_on_first_run: bool = False
+    # Notify items that are back in the shop after they were gone (FORGET_AFTER_HOURS)
+    notify_back: bool = True
     # Directory with custom subject.txt.j2 / body.txt.j2 / body.html.j2 templates
     notify_template_dir: Path | None = None
     # Language of the built-in templates
@@ -61,10 +64,11 @@ class Settings(NotifySettings):
     etsy_shop_id: int | None = None
 
     poll_interval: int = Field(default=300, ge=10)
-    # Hours a notified listing must be missing from the shop before it is forgotten
-    # (and notified again if it re-appears)
+    # Hours a notified listing must be missing from the shop before it counts as gone
+    # (and is notified as back in the shop if it returns)
     forget_after_hours: float = Field(default=24, ge=0)
-    db_path: Path = Path("shop-notify.db")
+    # Days the poll log is kept (shop-notify history --polls)
+    poll_history_days: float = Field(default=14, ge=0)
     heartbeat_file: Path | None = None
 
     @model_validator(mode="after")

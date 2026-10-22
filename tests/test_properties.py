@@ -61,9 +61,10 @@ def test_titles_are_always_escaped_in_html(title: str, language: str) -> None:
 
     message = MessageRenderer(language=language).render([listing])
 
-    assert str(escape(title)) in message.html
-    if "<" in title:
-        assert title not in message.html
+    escaped = str(escape(title))
+    assert f">{escaped}</a>" in message.html
+    if escaped != title:
+        assert f">{title}</a>" not in message.html
     # the text message is stripped, so leading/trailing whitespace may disappear
     assert title.strip() in message.text
 

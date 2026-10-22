@@ -63,8 +63,15 @@ class Quota:
 class EtsyClient:
     quota: Quota | None = None
     """Daily quota from the most recent response, if Etsy reported it."""
-    listings_complete: bool = True
-    """Whether the last ``active_listings`` call returned every listing Etsy counted."""
+    listings_reported: int = 0
+    """Number of active listings Etsy reported in the last ``active_listings`` call."""
+    listings_received: int = 0
+    """Number of distinct listings actually returned in the last ``active_listings`` call."""
+
+    @property
+    def listings_complete(self) -> bool:
+        """Whether the last ``active_listings`` call returned every listing Etsy counted."""
+        return self.listings_received >= self.listings_reported
 
     def __init__(
         self,
@@ -160,7 +167,7 @@ class EtsyClient:
         """Yield all active listings of a shop, newest first, following pagination."""
         offset = 0
         seen: set[object] = set()
-        self.listings_complete = False
+        self.listings_reported = self.listings_received = 0
         while True:
             response = self._get(
                 f"shops/{shop_id}/listings/active",
@@ -184,15 +191,9 @@ class EtsyClient:
             offset += len(page.results)
             if not page.results or offset >= page.count:
                 break
-        # Etsy's listing index is occasionally incomplete, and listings can shift
-        # between pages while paginating
-        self.listings_complete = len(seen) >= page.count
-        if not self.listings_complete:
-            log.warning(
-                "Etsy returned %d of %d active listings - the result may be incomplete",
-                len(seen),
-                page.count,
-            )
+        # Etsy's listing index is occasionally incomplete (the count is updated before
+        # the list), and listings can shift between pages while paginating
+        self.listings_reported, self.listings_received = page.count, len(seen)
 
 
 def _retry_after(response: httpx.Response, default: float) -> float:

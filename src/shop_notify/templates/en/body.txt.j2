@@ -1,6 +1,6 @@
 {% for item in listings %}
 {{ item.title }}
-{% if item.price %}{{ item.price | money }} · {% endif %}{{ item.listed | localtime }}
+{% if item.back %}Back in the shop · {% endif %}{% if item.price %}{{ item.price | money }}{% if item.back and item.back.previous_price %} (was {{ item.back.previous_price | money }}){% endif %} · {% endif %}{{ ("last seen " ~ (item.back.last_seen | localtime) ~ " (" ~ (item.back.gone_for | ago) ~ ")") if item.back else item.listed | localtime }}
 {{ item.url }}
 {% if not loop.last %}
 

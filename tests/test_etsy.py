@@ -268,7 +268,7 @@ def test_invalid_json_raises_etsy_error() -> None:
 
 
 @respx.mock
-def test_active_listings_reports_incomplete_results(caplog: pytest.LogCaptureFixture) -> None:
+def test_active_listings_reports_incomplete_results() -> None:
     route = respx.get(f"{BASE}shops/42/listings/active").mock(
         side_effect=[
             # the second page repeats an item that moved, so listing 2 is never seen
@@ -280,14 +280,13 @@ def test_active_listings_reports_incomplete_results(caplog: pytest.LogCaptureFix
         assert client.listings_complete
         list(client.active_listings(42))
         assert not client.listings_complete
+        assert (client.listings_received, client.listings_reported) == (2, 3)
 
         route.side_effect = [
             httpx.Response(200, json={"count": 2, "results": [_listing(1), _listing(2)]})
         ]
         list(client.active_listings(42))
         assert client.listings_complete
-
-    assert "Etsy returned 2 of 3 active listings" in caplog.text
 
 
 def test_listing_dates() -> None:

@@ -5,7 +5,9 @@
 #   1. first run: the existing listings are recorded, no mail is sent
 #   2. a new listing appears: exactly one HTML mail with title, price and image
 #   3. further polls, one of them without an old listing (gap in Etsy's index):
-#      no duplicate mail, nothing forgotten
+#      no duplicate mail, nothing gone
+#   4. an old listing is gone for longer than FORGET_AFTER_HOURS and comes back with a
+#      new price: one "back in the shop" mail with the old price and when it was last seen
 #
 # Usage: tests/e2e/run.sh [IMAGE]   (default: shop-notify:ci; needs docker, curl, jq, python3)
 set -euo pipefail
@@ -44,6 +46,7 @@ wait_for() {
 
 mail_count() { curl -sf "$MAILPIT_API/messages" | jq -r .total; }
 one_mail() { [[ $(mail_count) == 1 ]]; }
+two_mails() { [[ $(mail_count) == 2 ]]; }
 first_run_logged() { docker logs shop-notify-e2e 2>&1 | grep -q "First run: 3 existing item"; }
 
 # check_mail JQ_FILTER MESSAGE – the filter must be true for the received mail
@@ -60,7 +63,7 @@ MAIL_URL="mailto://localhost:$SMTP_PORT?mode=insecure&from=shop-notify@example.c
 docker run -d --name shop-notify-e2e --network host \
   -e ETSY_API_KEY=e2e-key -e ETSY_SHARED_SECRET=e2e-secret \
   -e ETSY_API_ENDPOINT="http://localhost:$ETSY_PORT/v3/application/" \
-  -e ETSY_SHOP_NAME=TestShop -e POLL_INTERVAL=10 \
+  -e ETSY_SHOP_NAME=TestShop -e POLL_INTERVAL=10 -e FORGET_AFTER_HOURS=0.01 \
   -e NOTIFY_URLS="$MAIL_URL" \
   "$IMAGE" >/dev/null
 
@@ -86,6 +89,19 @@ curl -sf -X POST "http://localhost:$ETSY_PORT/_hide_once" >/dev/null
 sleep 25
 [[ $(mail_count) == 1 ]] || fail "duplicate mail"
 docker logs shop-notify-e2e 2>&1 | grep -q "No new items this time" || fail "no further poll logged"
-docker logs shop-notify-e2e 2>&1 | grep -q "forgotten" && fail "briefly missing listing was forgotten"
+docker logs shop-notify-e2e 2>&1 | grep -q "No longer in the shop" && fail "briefly missing listing is gone"
+
+echo "4. a listing that was gone is notified as back, with its old price"
+curl -sf -X POST "http://localhost:$ETSY_PORT/_hide_for/50" >/dev/null
+wait_for 90 two_mails || fail "no mail for the listing back in the shop"
+docker logs shop-notify-e2e 2>&1 | grep -q "No longer in the shop: Handmade test item 1" \
+  || fail "listing was not marked as gone"
+id=$(curl -sf "$MAILPIT_API/messages" | jq -r '.messages[0].ID')
+curl -sf "$MAILPIT_API/message/$id" > "$MAIL"
+echo "   subject: $(jq -r .Subject "$MAIL")"
+check_mail '.Subject == "1 item back in TestShop"' "unexpected subject"
+check_mail '.HTML | contains("Back in the shop")' "back badge missing"
+check_mail '.HTML | contains("13.51") and contains("12.51")' "new or old price missing"
+check_mail '.HTML | contains("last seen")' "last seen missing"
 
 echo "OK"

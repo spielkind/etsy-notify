@@ -89,6 +89,23 @@ def format_datetime(value: datetime, language: str) -> str:
     return f"{local:%b} {local.day}, {local:%Y, %H:%M}"
 
 
+def format_ago(seconds: float, language: str) -> str:
+    """Rough age, e.g. "3 days ago" / "vor 3 Tagen"."""
+    minutes = max(round(seconds / 60), 0)
+    hours, days = round(seconds / 3600), round(seconds / 86400)
+    if minutes < 90:
+        value, unit = minutes, ("minute", "minutes", "Minute", "Minuten")
+    elif hours < 48:
+        value, unit = hours, ("hour", "hours", "Stunde", "Stunden")
+    elif days < 14:
+        value, unit = days, ("day", "days", "Tag", "Tagen")
+    else:
+        value, unit = round(days / 7), ("week", "weeks", "Woche", "Wochen")
+    if language == "de":
+        return f"vor {value} {unit[2] if value == 1 else unit[3]}"
+    return f"{value} {unit[0] if value == 1 else unit[1]} ago"
+
+
 def format_money(value: Money, language: str) -> str:
     symbol = CURRENCY_SYMBOLS.get(value.currency_code)
     number = f"{value.value:,.2f}"
@@ -131,6 +148,7 @@ class MessageRenderer:
         )
         self._env.filters["localtime"] = lambda value: format_datetime(value, language)
         self._env.filters["money"] = lambda value: format_money(value, language)
+        self._env.filters["ago"] = lambda value: format_ago(value, language)
         self._shop_name = shop_name
         try:
             for name in TEMPLATE_NAMES:

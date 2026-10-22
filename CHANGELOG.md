@@ -8,6 +8,27 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-22
+
+### Added
+- History of every listing: when it appeared, was notified, went missing, was
+  gone or came back, and changes of price and title; plus a log of the polls
+  (kept for `POLL_HISTORY_DAYS`, default 14)
+- `shop-notify history` shows the events of a period or of one listing, and
+  the polls (`--polls`)
+- Items that come back after being gone are notified as *back in the shop*,
+  with their previous price and when they were last seen; `NOTIFY_BACK=false`
+  only records them
+- Template variable `item.back` and filter `ago`
+
+### Changed
+- Listings are no longer deleted from the database when they are gone. The
+  database is upgraded automatically on the first start; a backup copy
+  `<DB_PATH>.bak-v0` is kept
+- An incomplete answer from Etsy is logged as info; a warning follows if it
+  lasts longer than an hour, and after `FORGET_AFTER_HOURS` it is processed
+  anyway
+
 ## [1.0.2] - 2026-10-21
 
 ### Fixed
@@ -159,7 +180,8 @@ until it has been verified against the real Etsy API with an approved key.
 
 Original version for the Etsy API v2 (never tagged).
 
-[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/spielkind/shop-notify/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/spielkind/shop-notify/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/spielkind/shop-notify/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/spielkind/shop-notify/compare/v1.0.0-rc.4...v1.0.0
