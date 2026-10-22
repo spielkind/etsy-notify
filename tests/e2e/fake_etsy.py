@@ -5,6 +5,7 @@ GET  /v3/application/shops/<id>/listings/active   → current listings, newest f
 GET  /v3/application/listings/batch               → main image per listing
 GET  /image.png                                   → sample image
 POST /_add                                        → publish one more listing
+POST /_add_reserved                               → publish a "Reserved listing for Martin"
 POST /_hide_once                                  → leave out the oldest listing once
 POST /_hide_for/<seconds>                         → leave out the oldest listing for a while;
                                                     it comes back 1.00 more expensive
@@ -28,11 +29,11 @@ port = 0
 state: dict[str, float] = {"hide_once": 0, "hidden_until": 0}
 
 
-def add_listing() -> dict[str, object]:
+def add_listing(title: str | None = None) -> dict[str, object]:
     number = len(listings) + 1
     listing = {
         "listing_id": 1000 + number,
-        "title": f"Handmade test item {number}",
+        "title": title or f"Handmade test item {number}",
         "url": f"https://www.etsy.com/listing/{1000 + number}/test-item",
         "last_modified_timestamp": int(time.time()),
         "state_timestamp": int(time.time()),
@@ -97,6 +98,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path == "/_add":
             self._json(add_listing())
+        elif self.path == "/_add_reserved":
+            self._json(add_listing("Reserved listing for Martin"))
         elif self.path == "/_hide_once":
             state["hide_once"] = 1
             self._json({})

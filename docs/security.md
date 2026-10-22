@@ -53,6 +53,7 @@ Users should be aware of these limits:
 | Credentials baked into the image | Docker build | `.dockerignore`; configuration only via `env_file` and mounted files at runtime |
 | HTML injection via listing titles | Etsy API → e-mail | Jinja2 autoescaping for HTML templates, `StrictUndefined` |
 | SQL injection | Etsy API → SQLite | parameterised queries only |
+| Slow regular expressions (ReDoS) | filters | patterns come from the operator, titles are at most 140 characters; invalid patterns are rejected at startup |
 | Malformed or hostile API responses | Etsy API | pydantic validation of every item; invalid items are skipped and logged; timeouts and bounded retries |
 | Man-in-the-middle | network | HTTPS with certificate verification (httpx defaults, not configurable); the default Etsy endpoint is HTTPS |
 | Privilege escalation after a compromise | runtime | non-root container user, no pip/build tools in the image; sandboxed systemd unit (`NoNewPrivileges`, `ProtectSystem=strict`, system call filter, no capabilities) |

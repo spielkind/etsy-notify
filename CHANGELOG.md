@@ -8,6 +8,23 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-22
+
+### Added
+- Filters: exclude or include items by keyword or regular expression and limit
+  the price, in `.env` (`NOTIFY_EXCLUDE`, `NOTIFY_INCLUDE`,
+  `NOTIFY_EXCLUDE_REGEX`, `NOTIFY_INCLUDE_REGEX`, `NOTIFY_MIN_PRICE`,
+  `NOTIFY_MAX_PRICE`) or in a YAML file (`FILTER_CONFIG`, see
+  `filters.example.yml`); documented with many examples in `docs/filters.md`
+- Filtered items are recorded in the history (`filtered` with the rule) and
+  notified once they pass, e.g. after the title changed
+- `shop-notify check-filters` tests a title or the items of a period against
+  the filters
+
+### Changed
+- Database schema version 2 (column `filtered`); upgraded automatically with a
+  backup copy `<DB_PATH>.bak-v1`
+
 ## [1.1.0] - 2026-10-22
 
 ### Added
@@ -180,7 +197,8 @@ until it has been verified against the real Etsy API with an approved key.
 
 Original version for the Etsy API v2 (never tagged).
 
-[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/spielkind/shop-notify/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/spielkind/shop-notify/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/spielkind/shop-notify/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/spielkind/shop-notify/compare/v1.0.0...v1.0.1

@@ -1,0 +1,33 @@
+# Filters for Shop Notify: which new items are notified.
+# Copy to filters.yml and set FILTER_CONFIG=filters.yml in .env
+# (Docker: mount it, e.g. ./filters.yml:/config/filters.yml:ro, and set
+# FILTER_CONFIG=/config/filters.yml). Documentation and more examples:
+# https://github.com/spielkind/shop-notify/blob/main/docs/filters.md
+#
+# - Rules check the title, case-insensitive.
+# - keyword: the title contains this text.
+# - regex:   the title matches this regular expression (Python syntax). Write it in
+#            single quotes, so that backslashes are kept as they are.
+# - An item matching any "exclude" rule is never notified ("exclude wins").
+# - With "include" rules, an item must match at least one of them.
+# - Test your filters: shop-notify check-filters "Some title"
+#                      shop-notify check-filters --since 30d
+
+exclude:
+  # Listings reserved for a single buyer, e.g. "Reserved listing for Martin"
+  - regex: '^reserved\b'
+  - regex: '\breserved for\b'
+  # Custom orders and gift cards
+  - keyword: custom order
+  - keyword: gift card
+
+# Uncomment to be notified only about certain products:
+# include:
+#   - regex: '\b(mug|vase|bowl)s?\b'   # mug, mugs, vase, vases, bowl, bowls
+#   - keyword: mini art print
+
+# Uncomment to limit the price (in the shop's currency; items without a price
+# are always notified):
+# price:
+#   min: 10
+#   max: 150

@@ -262,3 +262,86 @@ def test_refuses_a_database_from_a_newer_version(tmp_path: Path) -> None:
 def test_new_database_needs_no_backup(tmp_path: Path) -> None:
     ListingStore(tmp_path / "new.db").close()
     assert [p.name for p in tmp_path.iterdir()] == ["new.db"]
+
+
+def test_filtered_listings_are_rechecked_while_in_the_shop(store: ListingStore) -> None:
+    with at(0):
+        result = store.sync([make_listing(1), make_listing(2)])
+        store.mark_as_filtered([(result.pending[0], "exclude keyword 'item'")])
+        store.mark_as_notified(result.pending[1:])
+    with at(10):
+        result = store.sync([make_listing(1), make_listing(2)])
+    assert result.pending == []
+    assert ids(result.refilter) == [1]
+    [event] = [e for e in store.events(listing_id=1) if e.event == "filtered"]
+    assert event.details == {"reason": "exclude keyword 'item'"}
+
+    # filtering again adds no event; notifying clears the flag
+    store.mark_as_filtered([(make_listing(1), "again")])
+    assert len(store.events(listing_id=1)) == 2
+    store.mark_as_notified([make_listing(1)])
+    with at(20):
+        assert store.sync([make_listing(1), make_listing(2)]).refilter == []
+    assert [e.event for e in store.events(listing_id=1)] == ["new", "filtered", "notified"]
+
+
+def test_filtered_listings_not_in_the_shop_are_not_rechecked(store: ListingStore) -> None:
+    with at(0):
+        result = store.sync([make_listing(1)])
+        store.mark_as_filtered([(item, "x") for item in result.pending])
+    with at(10):
+        assert store.sync([]).refilter == []
+
+
+def test_seen_since(store: ListingStore) -> None:
+    with at(100):
+        store.sync([make_listing(1), make_listing(2)])
+    with at(200):
+        store.sync([make_listing(3), make_listing(2)])
+    assert ids(store.seen_since(150)) == [3, 2]
+    assert ids(store.seen_since(0)) == [3, 2, 1]
+
+
+def test_polls_count_filtered_listings(store: ListingStore) -> None:
+    result = store.sync([make_listing(1)])
+    result.filtered = 1
+    store.record_poll(reported=1, received=1, complete=True, result=result)
+    assert store.polls()[0].filtered == 1
+
+
+def test_migrates_a_database_from_version_1_1(tmp_path: Path) -> None:
+    path = tmp_path / "shop-notify.db"
+    old = sqlite3.connect(path)
+    old.executescript(
+        """
+        CREATE TABLE listings (
+            listing_id INTEGER PRIMARY KEY, first_seen INTEGER NOT NULL,
+            last_seen INTEGER NOT NULL, missing_since INTEGER, gone_since INTEGER,
+            notified_date INTEGER, back TEXT, result TEXT NOT NULL);
+        CREATE TABLE listing_events (
+            id INTEGER PRIMARY KEY, listing_id INTEGER NOT NULL, time INTEGER NOT NULL,
+            event TEXT NOT NULL, details TEXT);
+        CREATE TABLE polls (
+            id INTEGER PRIMARY KEY, time INTEGER NOT NULL, reported INTEGER,
+            received INTEGER, complete INTEGER, new INTEGER NOT NULL DEFAULT 0,
+            back INTEGER NOT NULL DEFAULT 0, missing INTEGER NOT NULL DEFAULT 0,
+            gone INTEGER NOT NULL DEFAULT 0, error TEXT);
+        PRAGMA user_version = 1;
+        """
+    )
+    old.execute(
+        "INSERT INTO listings (listing_id, first_seen, last_seen, notified_date, result) "
+        "VALUES (1, 100, 100, 100, ?)",
+        (make_listing(1).model_dump_json(),),
+    )
+    old.execute("INSERT INTO polls (time, new) VALUES (100, 1)")
+    old.commit()
+    old.close()
+
+    store = ListingStore(path)
+    assert (tmp_path / "shop-notify.db.bak-v1").is_file()
+    assert store.polls()[0].filtered == 0
+    with at(200):
+        result = store.sync([make_listing(1)])
+    assert (result.pending, result.refilter) == ([], [])
+    store.close()

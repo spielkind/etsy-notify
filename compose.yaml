@@ -9,4 +9,7 @@ services:
       # Notification targets: create notify.yml first (see notify.example.yml)
       # and set NOTIFY_CONFIG=/config/notify.yml in .env
       # - ./notify.yml:/config/notify.yml:ro
+      # Filters: create filters.yml (see filters.example.yml) and set
+      # FILTER_CONFIG=/config/filters.yml in .env
+      # - ./filters.yml:/config/filters.yml:ro
     restart: unless-stopped

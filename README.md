@@ -16,6 +16,7 @@ Shop Notify watches an Etsy shop and tells you – and anyone else you like – 
 
 - **New items and items back in the shop:** every listing is reported once; if it is gone for more than a day and comes back, you hear about it – with its previous price and when it was last seen.
 - **Any notification channel:** HTML e-mail with item images to as many recipients as you want, push to your phone via ntfy, Telegram, Signal and [100+ more](https://github.com/caronc/apprise/wiki) – also several at once.
+- **Only what you care about:** filters by keyword, regular expression or price – e.g. to skip reserved listings.
 - **Runs unattended:** made for a Raspberry Pi, as a Docker container or systemd service, with health check, watchdog and Etsy rate-limit handling.
 
 ## How it works
@@ -94,6 +95,10 @@ All settings are read from `.env` in the working directory or from environment v
 | `NOTIFY_IMAGES` | `true` | Push/chat services get one message per new item with its picture |
 | `NOTIFY_IMAGES_MAX` | `5` | Up to this many new items per poll are sent individually; above, one summary message |
 | `NOTIFY_IMAGES_IN_SUMMARY` | `false` | Attach up to 10 pictures to the summary message (a Telegram album with `?album=yes`) |
+| `NOTIFY_EXCLUDE`, `NOTIFY_INCLUDE` | – | [Filters](#filters): keywords, comma-separated |
+| `NOTIFY_EXCLUDE_REGEX`, `NOTIFY_INCLUDE_REGEX` | – | [Filters](#filters): one regular expression each, in single quotes |
+| `NOTIFY_MIN_PRICE`, `NOTIFY_MAX_PRICE` | – | [Filters](#filters): price range |
+| `FILTER_CONFIG` | – | Path to a YAML file with any number of [filters](#filters) |
 | `NOTIFY_TEMPLATE_DIR` | – | Directory with [custom message templates](https://github.com/spielkind/shop-notify/blob/main/docs/notifications.md#message-templates) |
 | `DB_PATH` | `shop-notify.db` | SQLite database of seen items |
 | `HEARTBEAT_FILE` | next to `DB_PATH` | Touched after every successful poll, used by the [health check](#health-check) |
@@ -131,6 +136,22 @@ urls:
 E-mail gets one HTML message with all new items; push and chat services get one message per item with its picture. Try your setup with `shop-notify test-notify` – no Etsy key needed.
 
 **→ [Notifications in detail](https://github.com/spielkind/shop-notify/blob/main/docs/notifications.md):** setting up Gmail, ntfy and Telegram, pictures and summaries, testing, custom templates and languages.
+
+### Filters
+Not interested in everything? Filters skip items by title or price – for example the *reserved listings* that shop owners create for a single buyer:
+
+```sh
+NOTIFY_EXCLUDE_REGEX='^reserved\b'      # in .env: skips "Reserved listing for Martin"
+```
+
+```sh
+shop-notify check-filters "Reserved listing for Martin"
+#   filtered  Reserved listing for Martin  <- exclude regex '^reserved\b'
+```
+
+Keywords and regular expressions can exclude or include items, prices can be limited, and many rules fit in a [`filters.yml`](https://github.com/spielkind/shop-notify/blob/main/filters.example.yml). Filtered items are recorded in the history and notified once they pass, e.g. after the title changed.
+
+**→ [Filters in detail](https://github.com/spielkind/shop-notify/blob/main/docs/filters.md):** rules, `filters.yml`, a short introduction to regular expressions, many examples and testing filters against your shop's real titles.
 
 ## Creating an Etsy app
 Shop Notify only reads public listings, so it needs an API key (keystring and shared secret) but no OAuth login. New apps start as *Pending Personal Approval*; until they are **Active**, every request fails with `403`. **→ [Step-by-step registration](https://github.com/spielkind/shop-notify/blob/main/docs/etsy-app.md)**
