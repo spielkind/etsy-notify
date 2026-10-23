@@ -9,6 +9,8 @@ POST /_add_reserved                               → publish a "Reserved listin
 POST /_hide_once                                  → leave out the oldest listing once
 POST /_hide_for/<seconds>                         → leave out the oldest listing for a while;
                                                     it comes back 1.00 more expensive
+POST /_sell_out_for/<seconds>                     → the oldest listing is sold out for a while,
+                                                    then restocked with a single item
 
 Run with: python fake_etsy.py PORT
 """
@@ -26,7 +28,7 @@ IMAGE = Path(__file__).resolve().parents[2] / "docs" / "sample-item.png"
 
 listings: list[dict[str, object]] = []
 port = 0
-state: dict[str, float] = {"hide_once": 0, "hidden_until": 0}
+state: dict[str, float] = {"hide_once": 0, "hidden_until": 0, "sold_out_until": 0}
 
 
 def add_listing(title: str | None = None) -> dict[str, object]:
@@ -38,10 +40,21 @@ def add_listing(title: str | None = None) -> dict[str, object]:
         "last_modified_timestamp": int(time.time()),
         "state_timestamp": int(time.time()),
         "price": {"amount": 1250 + number, "divisor": 100, "currency_code": "EUR"},
+        "quantity": 5,
+        "state": "active",
         "image_url": f"http://localhost:{port}/image.png",
     }
     listings.insert(0, listing)
     return listing
+
+
+def listing_state(item: dict[str, object]) -> str:
+    """The state Etsy reports for a single listing."""
+    if item is not listings[-1]:
+        return "active"
+    if time.time() < state["sold_out_until"]:
+        return "sold_out"
+    return "inactive" if time.time() < state["hidden_until"] else "active"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -71,7 +84,11 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"count": len(shops), "results": shops})
         elif url.path == f"/v3/application/shops/{SHOP_ID}/listings/active":
             # like a gap in Etsy's listing index: the listing is missing everywhere
-            hidden = state["hide_once"] or time.time() < state["hidden_until"]
+            hidden = (
+                state["hide_once"]
+                or time.time() < state["hidden_until"]
+                or time.time() < state["sold_out_until"]
+            )
             visible = listings[:-1] if hidden else listings
             state["hide_once"] = 0
             offset = int(query.get("offset", ["0"])[0])
@@ -86,6 +103,7 @@ class Handler(BaseHTTPRequestHandler):
             results = [
                 {
                     "listing_id": item["listing_id"],
+                    "state": listing_state(item),
                     "images": [{"rank": 1, "url_570xN": item["image_url"]}],
                 }
                 for item in listings
@@ -102,6 +120,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(add_listing("Reserved listing for Martin"))
         elif self.path == "/_hide_once":
             state["hide_once"] = 1
+            self._json({})
+        elif self.path.startswith("/_sell_out_for/"):
+            state["sold_out_until"] = time.time() + float(self.path.rsplit("/", 1)[1])
+            listings[-1]["quantity"] = 1  # restocked with a single item
             self._json({})
         elif self.path.startswith("/_hide_for/"):
             state["hidden_until"] = time.time() + float(self.path.rsplit("/", 1)[1])

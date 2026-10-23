@@ -3,6 +3,11 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+# Events that can be notified, in order of precedence: if several happen to a listing
+# before it is notified, the first one in this list wins
+EVENTS = ("new", "restocked", "back", "price_drop", "low_stock", "price_rise", "sold_out")
+DEFAULT_EVENTS = frozenset({"new", "back"})
+
 
 class Money(BaseModel):
     amount: int
@@ -17,17 +22,30 @@ class Money(BaseModel):
         return f"{self.value:.2f} {self.currency_code}"
 
 
-class Back(BaseModel):
-    """Context for a listing that is back in the shop after it was gone."""
+class Notice(BaseModel):
+    """Why a listing is notified, with the details for the message."""
 
-    last_seen: datetime
+    kind: str = "new"
+    last_seen: datetime | None = None
+    """back: when the listing was last seen before it was gone."""
+    sold_out_since: datetime | None = None
+    """restocked: when the listing was found sold out."""
+    first_seen: datetime | None = None
+    """sold_out: when Shop Notify first saw the listing."""
     previous_price: Money | None = None
-    """The price when it was last seen, if it differs from the current one."""
+    """The earlier price, if it differs from the current one."""
+    quantity: int | None = None
+    """The available quantity, if it is low."""
 
     @property
     def gone_for(self) -> float:
-        """Seconds between the last time the listing was seen and now."""
-        return (datetime.now(UTC) - self.last_seen).total_seconds()
+        """Seconds the listing was gone (back) or sold out (restocked), until now."""
+        since = self.last_seen or self.sold_out_since or self.first_seen
+        return (datetime.now(UTC) - since).total_seconds() if since else 0.0
+
+
+# The name used up to version 1.2
+Back = Notice
 
 
 class Listing(BaseModel):
@@ -43,9 +61,10 @@ class Listing(BaseModel):
     created_timestamp: int | None = None
     original_creation_timestamp: int | None = None
     price: Money | None = None
+    quantity: int | None = None
     image_url: str | None = None
-    # Set by Shop Notify for listings that are back in the shop; not stored
-    back: Back | None = Field(default=None, exclude=True)
+    # Set by Shop Notify for listings to notify; not stored
+    event: Notice | None = Field(default=None, exclude=True)
 
     @field_validator("price", mode="before")
     @classmethod
@@ -57,6 +76,21 @@ class Listing(BaseModel):
             return Money.model_validate(value)
         except ValidationError:
             return None
+
+    @field_validator("quantity", mode="before")
+    @classmethod
+    def _ignore_invalid_quantity(cls, value: object) -> object:
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    @property
+    def kind(self) -> str:
+        """The event this listing is notified for ("new" if none is set)."""
+        return self.event.kind if self.event else "new"
+
+    @property
+    def back(self) -> Notice | None:
+        """The notice of a listing that is back in the shop (templates of version 1.1)."""
+        return self.event if self.event and self.event.kind == "back" else None
 
     @property
     def last_modified(self) -> datetime:

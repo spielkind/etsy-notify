@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from shop_notify.models import Back, Listing, Money
+from shop_notify.models import Listing, Money, Notice
 from shop_notify.notifications import (
     AppriseNotifier,
     ConsoleNotifier,
@@ -54,7 +54,8 @@ def _back(listing: Listing, *, days: int = 30, previous: int | None = 2499) -> L
     previous_price = Money(amount=previous, divisor=100, currency_code="EUR") if previous else None
     return listing.model_copy(
         update={
-            "back": Back(
+            "event": Notice(
+                kind="back",
                 last_seen=datetime.now(UTC) - timedelta(days=days),
                 previous_price=previous_price,
             )

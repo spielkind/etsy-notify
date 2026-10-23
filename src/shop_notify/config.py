@@ -5,7 +5,9 @@ from typing import Literal, Self
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from shop_notify.db import EventSettings
 from shop_notify.filters import Filters
+from shop_notify.models import EVENTS
 
 
 class NotifySettings(BaseSettings):
@@ -26,8 +28,13 @@ class NotifySettings(BaseSettings):
     notify_console: Literal["auto"] | bool = "auto"
     # On the first run (empty database) existing items are only recorded, not notified
     notify_existing_on_first_run: bool = False
-    # Notify items that are back in the shop after they were gone (FORGET_AFTER_HOURS)
+    # Events to notify about (comma-separated): new, back, restocked, price_drop,
+    # price_rise, sold_out, low_stock - see docs/events.md
+    notify_events: str = "new,back"
+    # Up to version 1.2: false = don't notify items back in the shop
     notify_back: bool = True
+    notify_price_change_percent: Decimal = Field(default=Decimal(5), ge=0)
+    notify_low_stock: int = Field(default=1, ge=0)
     # Directory with custom subject.txt.j2 / body.txt.j2 / body.html.j2 templates
     notify_template_dir: Path | None = None
     # Language of the built-in templates
@@ -78,6 +85,27 @@ class NotifySettings(BaseSettings):
     @classmethod
     def _normalize_console(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("notify_events")
+    @classmethod
+    def _check_events(cls, value: str) -> str:
+        unknown = {e.strip() for e in value.split(",") if e.strip()} - set(EVENTS)
+        if unknown:
+            raise ValueError(
+                f"unknown event(s) {', '.join(sorted(unknown))}; use {', '.join(EVENTS)}"
+            )
+        return value
+
+    def event_settings(self) -> EventSettings:
+        """The events to notify, with ``NOTIFY_BACK=false`` removing "back"."""
+        enabled = {e.strip() for e in self.notify_events.split(",") if e.strip()}
+        if not self.notify_back:
+            enabled.discard("back")
+        return EventSettings(
+            enabled=frozenset(enabled),
+            price_change_percent=self.notify_price_change_percent,
+            low_stock=self.notify_low_stock,
+        )
 
     def filters(self) -> Filters:
         """The configured filters; raises ``FilterError`` if they are invalid."""

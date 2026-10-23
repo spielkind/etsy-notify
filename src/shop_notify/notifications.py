@@ -9,7 +9,7 @@ import apprise
 import jinja2
 from apprise.plugins.email import NotifyEmail
 
-from shop_notify.models import Listing, Money
+from shop_notify.models import EVENTS, Listing, Money
 
 log = logging.getLogger(__name__)
 
@@ -89,21 +89,182 @@ def format_datetime(value: datetime, language: str) -> str:
     return f"{local:%b} {local.day}, {local:%Y, %H:%M}"
 
 
-def format_ago(seconds: float, language: str) -> str:
-    """Rough age, e.g. "3 days ago" / "vor 3 Tagen"."""
+_UNITS = {
+    "minute": ("minute", "minutes", "Minute", "Minuten", "Minuten"),
+    "hour": ("hour", "hours", "Stunde", "Stunden", "Stunden"),
+    "day": ("day", "days", "Tag", "Tage", "Tagen"),
+    "week": ("week", "weeks", "Woche", "Wochen", "Wochen"),
+}
+
+
+def _rough(seconds: float) -> tuple[int, tuple[str, ...]]:
     minutes = max(round(seconds / 60), 0)
     hours, days = round(seconds / 3600), round(seconds / 86400)
     if minutes < 90:
-        value, unit = minutes, ("minute", "minutes", "Minute", "Minuten")
-    elif hours < 48:
-        value, unit = hours, ("hour", "hours", "Stunde", "Stunden")
-    elif days < 14:
-        value, unit = days, ("day", "days", "Tag", "Tagen")
-    else:
-        value, unit = round(days / 7), ("week", "weeks", "Woche", "Wochen")
+        return minutes, _UNITS["minute"]
+    if hours < 48:
+        return hours, _UNITS["hour"]
+    if days < 14:
+        return days, _UNITS["day"]
+    return round(days / 7), _UNITS["week"]
+
+
+def format_ago(seconds: float, language: str) -> str:
+    """Rough age, e.g. "3 days ago" / "vor 3 Tagen"."""
+    value, unit = _rough(seconds)
     if language == "de":
-        return f"vor {value} {unit[2] if value == 1 else unit[3]}"
+        return f"vor {value} {unit[2] if value == 1 else unit[4]}"
     return f"{value} {unit[0] if value == 1 else unit[1]} ago"
+
+
+def format_duration(seconds: float, language: str) -> str:
+    """Rough duration, e.g. "3 days" / "3 Tage"."""
+    value, unit = _rough(seconds)
+    if language == "de":
+        return f"{value} {unit[2] if value == 1 else unit[3]}"
+    return f"{value} {unit[0] if value == 1 else unit[1]}"
+
+
+# Per event: label in messages, item subject prefix, and the parts of the summary
+TEXTS: dict[str, dict[str, dict[str, str]]] = {
+    "en": {
+        "label": {
+            "back": "Back in the shop",
+            "restocked": "Back in stock",
+            "price_drop": "Price drop",
+            "price_rise": "Price increase",
+            "sold_out": "Sold out",
+            "low_stock": "Almost sold out",
+        },
+        "subject": {
+            "new": "New in",
+            "back": "Back in",
+            "restocked": "Back in stock in",
+            "price_drop": "Price drop in",
+            "price_rise": "Price increase in",
+            "sold_out": "Sold out in",
+            "low_stock": "Almost sold out in",
+        },
+        "summary": {
+            "new": "{n} new",
+            "back": "{n} back",
+            "restocked": "{n} back in stock",
+            "price_drop": "{n} price drop{s}",
+            "price_rise": "{n} price increase{s}",
+            "sold_out": "{n} sold out",
+            "low_stock": "{n} almost sold out",
+        },
+        "words": {
+            "and": "and",
+            "was": "was",
+            "last_seen": "last seen {date} ({ago})",
+            "sold_out_for": "sold out for {duration}",
+            "in_shop_since": "in the shop since {date}",
+            "left": "only {n} left",
+        },
+    },
+    "de": {
+        "label": {
+            "back": "Wieder im Shop",
+            "restocked": "Wieder verfügbar",
+            "price_drop": "Preissenkung",
+            "price_rise": "Preiserhöhung",
+            "sold_out": "Ausverkauft",
+            "low_stock": "Fast ausverkauft",
+        },
+        "subject": {
+            "new": "Neu in",
+            "back": "Wieder in",
+            "restocked": "Wieder verfügbar in",
+            "price_drop": "Preissenkung in",
+            "price_rise": "Preiserhöhung in",
+            "sold_out": "Ausverkauft in",
+            "low_stock": "Fast ausverkauft in",
+        },
+        "summary": {
+            "new": "{n} neu",
+            "back": "{n} wieder da",
+            "restocked": "{n} wieder verfügbar",
+            "price_drop": "{n} Preissenkung{en}",
+            "price_rise": "{n} Preiserhöhung{en}",
+            "sold_out": "{n} ausverkauft",
+            "low_stock": "{n} fast ausverkauft",
+        },
+        "words": {
+            "and": "und",
+            "was": "vorher",
+            "last_seen": "zuletzt gesehen {date} ({ago})",
+            "sold_out_for": "{duration} ausverkauft",
+            "in_shop_since": "im Shop seit {date}",
+            "left": "nur noch {n}",
+        },
+    },
+}
+
+
+def _summary_up_to_1_2(new: int, back: int, language: str) -> str:
+    """The wording of versions up to 1.2, for new items and items back in the shop."""
+    if language == "de":
+        items = f"{new} neue{'r' if new == 1 else ''} Artikel"
+        if not back:
+            return items
+        return f"{items} und {back} wieder" if new else f"{back} Artikel wieder"
+    items = f"{new} new item{'' if new == 1 else 's'}"
+    if not back:
+        return items
+    return f"{items} and {back} back" if new else f"{back} item{'' if back == 1 else 's'} back"
+
+
+def summarize(listings: Sequence[Listing], language: str) -> str:
+    """E.g. "2 new items", "1 new item and 1 back", "1 back in stock and 2 price drops"."""
+    counts: dict[str, int] = {}
+    for item in listings:
+        counts[item.kind] = counts.get(item.kind, 0) + 1
+    if set(counts) <= {"new", "back"}:
+        return _summary_up_to_1_2(counts.get("new", 0), counts.get("back", 0), language)
+    texts = TEXTS[language]
+    parts = [
+        texts["summary"][kind].format(n=n, s="" if n == 1 else "s", en="" if n == 1 else "en")
+        for kind in EVENTS
+        if (n := counts.get(kind, 0))
+    ]
+    if len(parts) == 1:
+        return parts[0]
+    return ", ".join(parts[:-1]) + f" {texts['words']['and']} " + parts[-1]
+
+
+def price_note(item: Listing, language: str) -> str:
+    """The earlier price, e.g. " (was €24.99)" or " (was €24.99, -20%)" for price changes."""
+    notice = item.event
+    if notice is None or notice.previous_price is None or item.price is None:
+        return ""
+    note = f"{TEXTS[language]['words']['was']} {format_money(notice.previous_price, language)}"
+    old = notice.previous_price
+    if item.kind in ("price_drop", "price_rise") and old.currency_code == item.price.currency_code:
+        percent = round((item.price.value - old.value) / old.value * 100)
+        sign = "+" if percent > 0 else "\u2212"
+        note += f", {sign}{abs(percent)}{' ' if language == 'de' else ''}%"
+    return f" ({note})"
+
+
+def when(item: Listing, language: str) -> str:
+    """The time information of an item, e.g. its listing date or "last seen …"."""
+    words = TEXTS[language]["words"]
+    notice = item.event
+    if notice is not None and notice.kind == "back" and notice.last_seen:
+        text = words["last_seen"].format(
+            date=format_datetime(notice.last_seen, language),
+            ago=format_ago(notice.gone_for, language),
+        )
+    elif notice is not None and notice.kind == "restocked" and notice.sold_out_since:
+        text = words["sold_out_for"].format(duration=format_duration(notice.gone_for, language))
+    elif notice is not None and notice.kind == "sold_out" and notice.first_seen:
+        text = words["in_shop_since"].format(date=format_datetime(notice.first_seen, language))
+    else:
+        text = format_datetime(item.listed, language)
+    if notice is not None and notice.quantity is not None:
+        text += " · " + words["left"].format(n=notice.quantity)
+    return text
 
 
 def format_money(value: Money, language: str) -> str:
@@ -149,6 +310,12 @@ class MessageRenderer:
         self._env.filters["localtime"] = lambda value: format_datetime(value, language)
         self._env.filters["money"] = lambda value: format_money(value, language)
         self._env.filters["ago"] = lambda value: format_ago(value, language)
+        self._env.filters["duration"] = lambda value: format_duration(value, language)
+        self._env.filters["summary"] = lambda value: summarize(value, language)
+        self._env.filters["event_label"] = lambda item: TEXTS[language]["label"].get(item.kind, "")
+        self._env.filters["subject_prefix"] = lambda item: TEXTS[language]["subject"][item.kind]
+        self._env.filters["price_note"] = lambda item: price_note(item, language)
+        self._env.filters["when"] = lambda item: when(item, language)
         self._shop_name = shop_name
         try:
             for name in TEMPLATE_NAMES:

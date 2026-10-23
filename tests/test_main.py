@@ -15,7 +15,7 @@ import respx
 from shop_notify import __main__ as cli
 from shop_notify import __version__
 from shop_notify.config import NotifySettings, Settings
-from shop_notify.db import ListingStore
+from shop_notify.db import EventSettings, ListingStore
 from shop_notify.etsy import EtsyClient, EtsyError, Quota
 from shop_notify.filters import Filters, Rule
 from shop_notify.models import Listing, Money
@@ -26,7 +26,7 @@ from shop_notify.notifications import (
     NotificationError,
 )
 from shop_notify.systemd import SystemdNotifier
-from tests.helpers import make_listing
+from tests.helpers import make_listing, sync
 
 BASE = "https://openapi.etsy.com/v3/application/"
 
@@ -207,7 +207,7 @@ def test_run_once_does_not_log_items_if_notification_fails(
         cli.run_once(client, store, notifier, 42, notify_existing=True)
 
     assert "New item:" not in caplog.text
-    assert [i.listing_id for i in store.sync([make_listing(1)]).pending] == [1]
+    assert [i.listing_id for i in sync(store, [make_listing(1)]).pending] == [1]
     store.close()
 
 
@@ -262,7 +262,7 @@ def test_run_once_notifies_items_back_in_the_shop(caplog: pytest.LogCaptureFixtu
 def test_run_once_can_skip_items_back_in_the_shop(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO)
     client = _client()
-    store = ListingStore(":memory:")
+    store = ListingStore(":memory:", events=EventSettings(enabled=frozenset({"new"})))
     notifier = RecordingNotifier()
     client.active_listings.return_value = [make_listing(1)]
     with _at(0):
@@ -274,11 +274,11 @@ def test_run_once_can_skip_items_back_in_the_shop(caplog: pytest.LogCaptureFixtu
         cli.run_once(client, store, notifier, 42, forget_after_hours=0)
     client.active_listings.return_value = [make_listing(1)]
     with _at(30):
-        assert cli.run_once(client, store, notifier, 42, notify_back=False) == 0
+        assert cli.run_once(client, store, notifier, 42) == 0
 
     assert len(notifier.calls) == 1  # only the silent first run
-    assert "Back in the shop (not notified): Item 1" in caplog.text
-    assert [e.event for e in store.events()][-2:] == ["back", "recorded"]
+    assert "No new items this time" in caplog.text
+    assert [e.event for e in store.events()][-2:] == ["gone", "back"]
     store.close()
 
 
@@ -350,9 +350,11 @@ def test_run_passes_settings_to_each_poll(
     )
     calls: list[dict[str, object]] = []
 
-    def fake_run_once(client: EtsyClient, *args: object, **kwargs: object) -> int:
+    def fake_run_once(
+        client: EtsyClient, store: ListingStore, *args: object, **kwargs: object
+    ) -> int:
         list(client.active_listings(42))
-        calls.append(kwargs)
+        calls.append(kwargs | {"events": store.events_settings.enabled})
         signal.raise_signal(signal.SIGTERM)
         return 0
 
@@ -361,7 +363,11 @@ def test_run_passes_settings_to_each_poll(
 
     [kwargs] = calls
     filters = kwargs.pop("filters")
-    assert kwargs == {"notify_existing": True, "notify_back": False, "forget_after_hours": 2.5}
+    assert kwargs == {
+        "notify_existing": True,
+        "forget_after_hours": 2.5,
+        "events": frozenset({"new"}),
+    }
     assert isinstance(filters, Filters)
     assert filters.describe() == [r"exclude regex '^reserved\b'"]
     assert route.calls[0].request.headers["x-api-key"] == "key:secret"
@@ -792,7 +798,7 @@ def history_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     )
     now = time.time()
     with patch("time.time", return_value=now - 3600):
-        store.mark_as_notified(store.sync([item]).pending)
+        store.mark_as_notified(sync(store, [item]).pending)
         store.record_poll(reported=1, received=1, complete=True)
     with patch("time.time", return_value=now - 600):
         store.sync([], complete=True)

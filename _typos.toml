@@ -6,3 +6,4 @@ certifi = "certifi"
 intoto = "intoto"
 # German ("vor 3 Tagen" = "3 days ago")
 vor = "vor"
+Tage = "Tage"

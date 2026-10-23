@@ -182,19 +182,56 @@ def listings_complete(client: EtsyClient, store: ListingStore, forget_after: flo
     return False
 
 
+LOG_LABELS = {
+    "new": "New item",
+    "back": "Back in the shop",
+    "restocked": "Back in stock",
+    "price_drop": "Price drop",
+    "price_rise": "Price increase",
+    "sold_out": "Sold out",
+    "low_stock": "Almost sold out",
+}
+
+
+def describe_notice(item: Listing) -> str:
+    """Log line for a notified listing, e.g. "Price drop: Mug (https://…), was 24.99 EUR"."""
+    line = f"{LOG_LABELS[item.kind]}: {item.title} ({item.url})"
+    notice = item.event
+    if notice is None:
+        return line
+    extra = []
+    if notice.last_seen:
+        extra.append(f"last seen {notice.last_seen.astimezone():%Y-%m-%d %H:%M}")
+    if notice.sold_out_since:
+        extra.append(f"sold out since {notice.sold_out_since.astimezone():%Y-%m-%d %H:%M}")
+    if notice.previous_price:
+        extra.append(f"was {notice.previous_price}")
+    if notice.quantity is not None:
+        extra.append(f"{notice.quantity} left")
+    return ", ".join([line, *extra])
+
+
+def look_up_states(client: EtsyClient, store: ListingStore, result: SyncResult) -> None:
+    """Ask Etsy why listings went missing: sold out, deactivated, expired or removed."""
+    if not result.newly_missing:
+        return
+    try:
+        states = client.listing_states(result.newly_missing)
+    except EtsyError as e:
+        log.warning("Could not look up the state of missing listings: %s", e)
+        return
+    store.record_states(states, result)
+    for listing_id, state in sorted(states.items()):
+        if state != "active":  # otherwise a gap in Etsy's listing index
+            log.info("Listing %d is no longer listed: %s", listing_id, state.replace("_", " "))
+
+
 def select_to_notify(
-    store: ListingStore, result: SyncResult, *, notify_back: bool, filters: Filters | None
+    store: ListingStore, result: SyncResult, order: Sequence[Listing], filters: Filters | None
 ) -> list[Listing]:
-    """The pending listings that are notified; the others are recorded as skipped."""
-    pending = result.pending
-    if not notify_back:
-        skipped = [item for item in pending if item.back]
-        store.mark_as_notified(skipped, sent=False)
-        for item in skipped:
-            log.info("Back in the shop (not notified): %s (%s)", item.title, item.url)
-        pending = [item for item in pending if not item.back]
+    """The queued listings that pass the filters; the others are recorded as filtered."""
     filters = filters or Filters()
-    pending, filtered = split_listings(filters, pending)
+    pending, filtered = split_listings(filters, store.pending(order))
     store.mark_as_filtered(filtered)
     result.filtered = len(filtered)
     for item, reason in filtered:
@@ -212,16 +249,16 @@ def run_once(
     shop_id: int,
     *,
     notify_existing: bool = False,
-    notify_back: bool = True,
     forget_after_hours: float = 24,
     filters: Filters | None = None,
 ) -> int:
-    """Poll once and notify new items and items back in the shop.
+    """Poll once and send the queued notifications.
 
-    Returns the number of notified items. On the first run (empty database) the
-    existing items are only recorded unless ``notify_existing`` is set; notifiers still
-    receive them flagged as ``initial``. Items that don't pass the ``filters`` are
-    recorded as filtered and checked again in every poll while they are in the shop, so
+    Returns the number of notified items. Which events are notified is set in the
+    ``store`` (``EventSettings``). On the first run (empty database) the existing items
+    are only recorded unless ``notify_existing`` is set; notifiers still receive them
+    flagged as ``initial``. Items that don't pass the ``filters`` are recorded as
+    filtered; new ones are checked again in every poll while they are in the shop, so
     they are notified once they pass (e.g. after a title change). Every poll is
     recorded, including failed ones.
     """
@@ -240,9 +277,10 @@ def run_once(
         complete=listings_complete(client, store, forget_after),
         forget_after=forget_after,
     )
+    look_up_states(client, store, result)
     for item in result.gone:
         log.info("No longer in the shop: %s (%s)", item.title, item.url)
-    pending = select_to_notify(store, result, notify_back=notify_back, filters=filters)
+    pending = select_to_notify(store, result, listings, filters)
 
     error = None
     try:
@@ -259,15 +297,7 @@ def run_once(
             notifier.notify(add_images(client, pending))
             store.mark_as_notified(pending)
             for item in pending:
-                if item.back:
-                    log.info(
-                        "Back in the shop: %s (%s), last seen %s",
-                        item.title,
-                        item.url,
-                        f"{item.back.last_seen.astimezone():%Y-%m-%d %H:%M}",
-                    )
-                else:
-                    log.info("New item: %s (%s)", item.title, item.url)
+                log.info("%s", describe_notice(item))
             log.info("Notified %d item(s)", len(pending))
         else:
             log.info("No new items this time")
@@ -335,7 +365,11 @@ def run(settings: Settings) -> None:
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
-    store = ListingStore(settings.db_path, poll_history_days=settings.poll_history_days)
+    store = ListingStore(
+        settings.db_path,
+        poll_history_days=settings.poll_history_days,
+        events=settings.event_settings(),
+    )
     with EtsyClient(
         api_key=settings.etsy_api_key.get_secret_value(),
         shared_secret=settings.etsy_shared_secret.get_secret_value(),
@@ -352,7 +386,6 @@ def run(settings: Settings) -> None:
                         notifier,
                         shop_id,
                         notify_existing=settings.notify_existing_on_first_run,
-                        notify_back=settings.notify_back,
                         forget_after_hours=settings.forget_after_hours,
                         filters=filters,
                     )
@@ -457,7 +490,15 @@ def test_notify(settings: NotifySettings, url: str | None = None) -> int:
 
 
 _SINCE_UNITS = {"m": 60, "h": 3600, "d": 86400, "w": 7 * 86400}
-_TIME_DETAILS = ("since", "last_seen", "created", "renewed", "active_since", "modified")
+_TIME_DETAILS = (
+    "since",
+    "last_seen",
+    "sold_out_since",
+    "created",
+    "renewed",
+    "active_since",
+    "modified",
+)
 
 
 def parse_since(value: str) -> float:
@@ -510,6 +551,8 @@ def history(
                         "back": poll.back,
                         "missing": poll.missing,
                         "gone": poll.gone,
+                        "sold out": poll.sold_out,
+                        "restocked": poll.restocked,
                         "filtered": poll.filtered,
                     }
                     line += "".join(f", {n} {k}" for k, n in changes.items() if n)
