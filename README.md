@@ -5,15 +5,15 @@
 | Name                              |    Stmts |     Miss |   Branch |   BrPart |    Cover |   Missing |
 |---------------------------------- | -------: | -------: | -------: | -------: | -------: | --------: |
 | src/shop\_notify/\_\_init\_\_.py  |        2 |        0 |        0 |        0 |     100% |           |
-| src/shop\_notify/\_\_main\_\_.py  |      356 |        0 |      110 |        0 |     100% |           |
-| src/shop\_notify/config.py        |       64 |        0 |        2 |        0 |     100% |           |
-| src/shop\_notify/db.py            |      161 |        0 |       46 |        0 |     100% |           |
-| src/shop\_notify/etsy.py          |      123 |        0 |       20 |        0 |     100% |           |
+| src/shop\_notify/\_\_main\_\_.py  |      376 |        0 |      120 |        0 |     100% |           |
+| src/shop\_notify/config.py        |       81 |        0 |        6 |        0 |     100% |           |
+| src/shop\_notify/db.py            |      252 |        0 |       78 |        0 |     100% |           |
+| src/shop\_notify/etsy.py          |      152 |        0 |       28 |        0 |     100% |           |
 | src/shop\_notify/filters.py       |      149 |        0 |       36 |        0 |     100% |           |
-| src/shop\_notify/models.py        |       37 |        0 |        2 |        0 |     100% |           |
-| src/shop\_notify/notifications.py |      183 |        0 |       62 |        0 |     100% |           |
+| src/shop\_notify/models.py        |       61 |        0 |        2 |        0 |     100% |           |
+| src/shop\_notify/notifications.py |      243 |        0 |       88 |        0 |     100% |           |
 | src/shop\_notify/systemd.py       |       37 |        0 |        6 |        0 |     100% |           |
-| **TOTAL**                         | **1112** |    **0** |  **284** |    **0** | **100%** |           |
+| **TOTAL**                         | **1353** |    **0** |  **364** |    **0** | **100%** |           |
 
 
 ## Setup coverage badge
