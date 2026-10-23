@@ -308,8 +308,9 @@ titles from your shop before you switch them on.
   then (log: `Now passes the filters: …`).
   If you remove a filter, items it held back that are still in the shop are therefore
   notified at the next poll.
-- Filters also apply to items that are [back in the shop](../README.md#how-it-works)
-  and to the first run with `NOTIFY_EXISTING_ON_FIRST_RUN=true`.
+- Filters apply to every [event](events.md) – e.g. a filtered item doesn't cause a "back
+  in stock" or "price drop" message either – and to the first run with
+  `NOTIFY_EXISTING_ON_FIRST_RUN=true`.
 
 ## Troubleshooting
 

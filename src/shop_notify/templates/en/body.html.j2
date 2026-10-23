@@ -24,21 +24,18 @@
       <tr><td style="padding:16px 20px;">
         <a href="{{ item.url }}" style="font-size:17px;font-weight:700;color:#264653;text-decoration:none;">{{ item.title }}</a>
         <div style="margin-top:6px;font-size:14px;color:#6B4E45;">
-{% if item.back %}
-          <span style="display:inline-block;padding:2px 8px;margin:0 6px 4px 0;background:#E9C46A;color:#264653;border-radius:4px;font-size:12px;font-weight:700;">Back in the shop</span>
+{% set label = item | event_label %}
+{% if label %}
+          <span style="display:inline-block;padding:2px 8px;margin:0 6px 4px 0;background:#E9C46A;color:#264653;border-radius:4px;font-size:12px;font-weight:700;">{{ label }}</span>
 {% endif %}
 {% if item.price %}
           <strong style="color:#D1495B;">{{ item.price | money }}</strong>
-{% if item.back and item.back.previous_price %}
-          <span style="text-decoration:line-through;">{{ item.back.previous_price | money }}</span>
+{% if item.event and item.event.previous_price %}
+          <span style="text-decoration:line-through;">{{ item.event.previous_price | money }}</span>
 {% endif %}
           &middot;
 {% endif %}
-{% if item.back %}
-          last seen {{ item.back.last_seen | localtime }} ({{ item.back.gone_for | ago }})
-{% else %}
-          {{ item.listed | localtime }}
-{% endif %}
+          {{ item | when }}
         </div>
         <div style="margin-top:12px;">
           <a href="{{ item.url }}" style="display:inline-block;padding:8px 16px;background:#2A9D8F;color:#FFFFFF;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none;">View item</a>

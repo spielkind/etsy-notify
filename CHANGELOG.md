@@ -8,6 +8,26 @@ notation (e.g. `1.0.0rc1` for `1.0.0-rc.1`).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-23
+
+### Added
+- More events, chosen with `NOTIFY_EVENTS` (default `new,back`): `restocked`
+  (a sold-out item is available again – notified right away), `price_drop`,
+  `price_rise` (`NOTIFY_PRICE_CHANGE_PERCENT`, default 5), `sold_out` and
+  `low_stock` (`NOTIFY_LOW_STOCK`, default 1); documented in `docs/events.md`
+- For items that disappear from the shop, Etsy is asked why: sold out,
+  deactivated, expired or removed; recorded in the history
+- Quantities are stored; messages mention when only a few are left
+- Messages and subjects for every event, in English and German; template
+  variables `item.kind`, `item.event` and new filters
+- `history --polls` counts sold-out and restocked items
+
+### Changed
+- Database schema version 3 with a notification queue; upgraded automatically
+  with a backup copy `<DB_PATH>.bak-v2`
+- `NOTIFY_BACK` is superseded by `NOTIFY_EVENTS`; `NOTIFY_BACK=false` still
+  works
+
 ## [1.2.0] - 2026-10-22
 
 ### Added
@@ -197,7 +217,8 @@ until it has been verified against the real Etsy API with an approved key.
 
 Original version for the Etsy API v2 (never tagged).
 
-[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/spielkind/shop-notify/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/spielkind/shop-notify/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/spielkind/shop-notify/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/spielkind/shop-notify/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/spielkind/shop-notify/compare/v1.0.1...v1.0.2

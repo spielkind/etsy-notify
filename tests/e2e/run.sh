@@ -9,6 +9,8 @@
 #      no duplicate mail, nothing gone
 #   4. an old listing is gone for longer than FORGET_AFTER_HOURS and comes back with a
 #      new price: one "back in the shop" mail with the old price and when it was last seen
+#   5. a listing is sold out for a short while and restocked with a single item: one
+#      "back in stock" mail right away (NOTIFY_EVENTS includes restocked)
 #
 # Usage: tests/e2e/run.sh [IMAGE]   (default: shop-notify:ci; needs docker, curl, jq, python3)
 set -euo pipefail
@@ -52,6 +54,7 @@ log_has() { local log; log=$(docker logs shop-notify-e2e 2>&1); grep -q -- "$1" 
 mail_count() { curl -sf "$MAILPIT_API/messages" | jq -r .total; }
 one_mail() { [[ $(mail_count) == 1 ]]; }
 two_mails() { [[ $(mail_count) == 2 ]]; }
+three_mails() { [[ $(mail_count) == 3 ]]; }
 first_run_logged() { log_has "First run: 3 existing item"; }
 
 # check_mail JQ_FILTER MESSAGE – the filter must be true for the received mail
@@ -69,7 +72,7 @@ docker run -d --name shop-notify-e2e --network host \
   -e ETSY_API_KEY=e2e-key -e ETSY_SHARED_SECRET=e2e-secret \
   -e ETSY_API_ENDPOINT="http://localhost:$ETSY_PORT/v3/application/" \
   -e ETSY_SHOP_NAME=TestShop -e POLL_INTERVAL=10 -e FORGET_AFTER_HOURS=0.01 \
-  -e 'NOTIFY_EXCLUDE_REGEX=^reserved\b' \
+  -e 'NOTIFY_EXCLUDE_REGEX=^reserved\b' -e NOTIFY_EVENTS=new,back,restocked \
   -e NOTIFY_URLS="$MAIL_URL" \
   "$IMAGE" >/dev/null
 
@@ -119,5 +122,17 @@ check_mail '.Subject == "1 item back in TestShop"' "unexpected subject"
 check_mail '.HTML | contains("Back in the shop")' "back badge missing"
 check_mail '.HTML | contains("13.51") and contains("12.51")' "new or old price missing"
 check_mail '.HTML | contains("last seen")' "last seen missing"
+
+echo "5. a sold-out listing is notified as back in stock when it is restocked"
+curl -sf -X POST "http://localhost:$ETSY_PORT/_sell_out_for/15" >/dev/null
+sold_out_logged() { log_has "Listing 1001 is no longer listed: sold out"; }
+wait_for 30 sold_out_logged || fail "sold-out listing not recognised"
+wait_for 60 three_mails || fail "no mail for the restocked listing"
+id=$(curl -sf "$MAILPIT_API/messages" | jq -r '.messages[0].ID')
+curl -sf "$MAILPIT_API/message/$id" > "$MAIL"
+echo "   subject: $(jq -r .Subject "$MAIL")"
+check_mail '.Subject == "1 back in stock in TestShop"' "unexpected subject"
+check_mail '.HTML | contains("Back in stock")' "back-in-stock badge missing"
+check_mail '.HTML | contains("sold out for") and contains("only 1 left")' "details missing"
 
 echo "OK"

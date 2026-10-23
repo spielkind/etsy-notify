@@ -30,16 +30,20 @@ All modules are in [`src/shop_notify/`](../src/shop_notify):
 1. `EtsyClient.active_listings` fetches all active listings of the shop, newest first,
    page by page. Each listing is validated on its own; invalid ones are logged and
    skipped.
-2. `ListingStore.sync` stores the current listings, records changes of price and title
-   and returns the listings to notify: new ones, those back in the shop and earlier ones
-   whose notification failed.
+2. `ListingStore.sync` stores the current listings, records changes of price, title
+   and quantity, and queues a notification (`pending`) for the enabled
+   [events](events.md): new, back, restocked, price drop or rise, low stock. A queued
+   notification stays until it was sent, so failed ones are retried.
    - A notified listing that is missing from a complete response is marked as
      *missing*; if it comes back before `FORGET_AFTER_HOURS` (24 h) nothing is sent.
    - After that it counts as *gone*. If it comes back later, it is notified as *back in
-     the shop* with its previous price and when it was last seen (`NOTIFY_BACK`).
+     the shop* with its previous price and when it was last seen.
    - Etsy's count of listings is sometimes ahead of the list it returns. Such an
      incomplete response doesn't mark anything as missing; it is logged, with a warning
      after one hour, and processed anyway after `FORGET_AFTER_HOURS`.
+   - For listings missing for the first time, `EtsyClient.listing_states` asks Etsy
+     why (`sold_out`, `inactive`, `expired`, removed); a sold-out listing is notified
+     as *restocked* as soon as it's back.
 3. The listings to notify pass through the [filters](filters.md). Those that don't
    are marked as *filtered*; while they are in the shop they are checked again on
    every poll and notified once they pass (e.g. after a title change).
@@ -73,9 +77,11 @@ erDiagram
         INTEGER last_seen "last poll that returned it"
         INTEGER missing_since "not returned since (complete polls), else NULL"
         INTEGER gone_since "missing for longer than FORGET_AFTER_HOURS, else NULL"
-        INTEGER notified_date "NULL while a notification is pending"
+        INTEGER sold_out_since "Etsy reported it as sold out, else NULL"
+        INTEGER notified_date "last notified or recorded, NULL if never"
+        TEXT notified_price "lowest notified price, for price drops (JSON)"
         INTEGER filtered "1 if held back by the filters"
-        TEXT back "last seen and previous price while 'back' is pending (JSON)"
+        TEXT pending "queued notification: kind and details (JSON), else NULL"
         TEXT result "latest state: title, URL, price, Etsy timestamps (JSON)"
     }
     listing_events {
@@ -96,6 +102,8 @@ erDiagram
         INTEGER missing
         INTEGER gone
         INTEGER filtered
+        INTEGER restocked
+        INTEGER sold_out
         TEXT error "set for failed polls"
     }
 ```
@@ -106,18 +114,23 @@ All times are Unix timestamps (UTC). Events:
 |---|---|---|
 | `new` | first seen | price and Etsy's timestamps: `created`, `renewed`, `active_since`, `modified` |
 | `imported` | taken over from a database of version 1.0 | – |
-| `notified` / `recorded` | notification sent / only recorded (first run, `NOTIFY_BACK=false`) | – |
+| `notified` / `recorded` | notification sent / only recorded (first run) | `kind` unless `new` |
 | `missing` | came back within `FORGET_AFTER_HOURS` | `since` (last seen), `seconds` missing |
 | `gone` | missing for longer than `FORGET_AFTER_HOURS` | – |
 | `filtered` | held back by the filters | `reason`, e.g. `exclude regex '^reserved\b'` |
 | `back` | came back after being gone | `last_seen` |
+| `sold_out`, `inactive`, `expired`, `removed` | Etsy's state of a listing that went missing | – |
+| `restocked` | a sold-out listing is active again | `sold_out_since` |
+| `low_stock` | quantity dropped to `NOTIFY_LOW_STOCK` or below | `quantity` |
 | `price_changed`, `title_changed` | price or title differs from the last poll | `old`, `new` |
 
 **Migrations:** the schema version is stored in `PRAGMA user_version`. On startup an older
 database is upgraded automatically after a backup copy (`<DB_PATH>.bak-v<version>`) was
 made; a database of a newer version is refused. Version 1 (Shop Notify 1.1) replaced the
 table of 1.0 (`listing_id`, `request_date`, `notified_date`, `result`); version 2
-(Shop Notify 1.2) added the `filtered` columns.
+(Shop Notify 1.2) added the `filtered` columns; version 3 (Shop Notify 1.3) replaced
+`back` with the notification queue `pending` and added `sold_out_since`, `notified_price`
+and the poll counts `restocked` and `sold_out`.
 
 ## External interfaces and trust boundaries
 

@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import re
 import time
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -20,6 +21,11 @@ MAX_RETRY_AFTER = 300.0
 class EtsyError(Exception):
     """Raised when the Etsy API cannot be queried successfully."""
 
+    def __init__(self, message: str, status_code: int | None = None, body: str = "") -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.body = body
+
 
 class _RawPage(BaseModel):
     """A page of results that are validated one by one."""
@@ -36,6 +42,11 @@ class _Shop(BaseModel):
 class _ShopsPage(BaseModel):
     count: int
     results: list[_Shop]
+
+
+class _ListingState(BaseModel):
+    listing_id: int
+    state: str
 
 
 class _ListingImage(BaseModel):
@@ -130,7 +141,9 @@ class EtsyClient:
         if response.is_error:
             raise EtsyError(
                 f"Unexpected status {response.status_code} from {response.request.url}: "
-                f"{response.text}"
+                f"{response.text}",
+                status_code=response.status_code,
+                body=response.text,
             )
         return response
 
@@ -162,6 +175,30 @@ class EtsyClient:
                     main = min(listing.images, key=lambda image: image.rank)
                     images[listing.listing_id] = main.url_570xN
         return images
+
+    def listing_states(self, listing_ids: Sequence[int]) -> dict[int, str]:
+        """Return the state of each listing: active, sold_out, inactive, expired, ….
+
+        Listings that no longer exist are returned as ``removed``.
+        """
+        states: dict[int, str] = {}
+        remaining = list(dict.fromkeys(listing_ids))
+        while remaining:
+            chunk, remaining = remaining[:PAGE_SIZE], remaining[PAGE_SIZE:]
+            try:
+                response = self._get("listings/batch", {"listing_ids": ",".join(map(str, chunk))})
+            except EtsyError as e:
+                # The whole request fails if a single listing doesn't exist; Etsy names them
+                missing = _missing_listing_ids(e) & set(chunk)
+                if not missing:
+                    raise
+                states |= dict.fromkeys(missing, "removed")
+                remaining = [i for i in chunk if i not in missing] + remaining
+                continue
+            for listing in _validate_each(_ListingState, _parse_page(response).results):
+                states[listing.listing_id] = listing.state
+            states |= {i: "removed" for i in chunk if i not in states}
+        return states
 
     def active_listings(self, shop_id: int) -> Iterator[Listing]:
         """Yield all active listings of a shop, newest first, following pagination."""
@@ -202,6 +239,13 @@ def _retry_after(response: httpx.Response, default: float) -> float:
     except KeyError, ValueError:
         delay = default
     return min(max(delay, 0.0), MAX_RETRY_AFTER)
+
+
+def _missing_listing_ids(error: EtsyError) -> set[int]:
+    if error.status_code != httpx.codes.NOT_FOUND:
+        return set()
+    match = re.search(r"Missing listing_ids: ([\d, ]+)", error.body)
+    return {int(i) for i in re.findall(r"\d+", match[1])} if match else set()
 
 
 def _parse_page(response: httpx.Response) -> _RawPage:

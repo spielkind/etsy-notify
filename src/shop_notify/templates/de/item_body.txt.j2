@@ -1,3 +1,3 @@
 {{ item.title }}
-{% if item.back %}Wieder im Shop · {% endif %}{% if item.price %}{{ item.price | money }}{% if item.back and item.back.previous_price %} (vorher {{ item.back.previous_price | money }}){% endif %} · {% endif %}{{ ("zuletzt gesehen " ~ (item.back.last_seen | localtime) ~ " (" ~ (item.back.gone_for | ago) ~ ")") if item.back else item.listed | localtime }}
+{% set label = item | event_label %}{% if label %}{{ label }} · {% endif %}{% if item.price %}{{ item.price | money }}{{ item | price_note }} · {% endif %}{{ item | when }}
 {{ item.url }}

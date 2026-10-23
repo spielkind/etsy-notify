@@ -9,7 +9,7 @@ import pytest
 
 from shop_notify.db import SCHEMA_VERSION, Event, ListingStore
 from shop_notify.models import Listing, Money
-from tests.helpers import make_listing
+from tests.helpers import make_listing, sync
 
 HOUR = 3600
 
@@ -36,19 +36,19 @@ def events(store: ListingStore, listing_id: int | None = None) -> list[tuple[int
 def test_new_listings_are_returned_until_notified(store: ListingStore) -> None:
     items = [make_listing(1), make_listing(2)]
 
-    result = store.sync(items)
+    result = sync(store, items)
     assert ids(result.pending) == [1, 2]
     assert result.new == 2
     store.mark_as_notified(items)
-    assert store.sync(items).pending == []
+    assert sync(store, items).pending == []
     assert events(store) == [(1, "new"), (2, "new"), (1, "notified"), (2, "notified")]
 
 
 def test_new_listings_keep_the_given_order(store: ListingStore) -> None:
     with at(100):
-        store.sync([make_listing(9)])  # pending, will vanish
+        sync(store, [make_listing(9)])  # pending, will vanish
     with at(200):
-        assert ids(store.sync([make_listing(3), make_listing(1), make_listing(2)]).pending) == [
+        assert ids(sync(store, [make_listing(3), make_listing(1), make_listing(2)]).pending) == [
             3,
             1,
             2,
@@ -58,9 +58,9 @@ def test_new_listings_keep_the_given_order(store: ListingStore) -> None:
 
 def test_unnotified_listing_survives_disappearing(store: ListingStore) -> None:
     with at(100):
-        store.sync([make_listing(1)])
+        sync(store, [make_listing(1)])
     with at(100 + 48 * HOUR):
-        result = store.sync([])
+        result = sync(store, [])
     assert ids(result.pending) == [1]
     assert result.missing == 0
     assert result.gone == []
@@ -68,15 +68,15 @@ def test_unnotified_listing_survives_disappearing(store: ListingStore) -> None:
 
 def test_briefly_missing_listing_is_recorded_but_not_notified(store: ListingStore) -> None:
     with at(0):
-        store.mark_as_notified(store.sync([make_listing(1), make_listing(2)]).pending)
+        store.mark_as_notified(sync(store, [make_listing(1), make_listing(2)]).pending)
     with at(HOUR):
-        result = store.sync([make_listing(2)], forget_after=2 * HOUR)
+        result = sync(store, [make_listing(2)], forget_after=2 * HOUR)
         assert result.missing == 1
         assert result.gone == []
     with at(2 * HOUR):
-        assert store.sync([make_listing(2)], forget_after=2 * HOUR).missing == 0  # already
+        assert sync(store, [make_listing(2)], forget_after=2 * HOUR).missing == 0  # already
     with at(2 * HOUR + 60):
-        result = store.sync([make_listing(1), make_listing(2)], forget_after=2 * HOUR)
+        result = sync(store, [make_listing(1), make_listing(2)], forget_after=2 * HOUR)
     assert result.pending == []
     assert result.back == 0
     missing = store.events(listing_id=1)[-1]
@@ -92,13 +92,13 @@ def test_listing_gone_for_longer_is_back_with_last_seen_and_old_price(
     )
     new = old.model_copy(update={"price": Money(amount=1999, divisor=100, currency_code="USD")})
     with at(0):
-        store.mark_as_notified(store.sync([old]).pending)
+        store.mark_as_notified(sync(store, [old]).pending)
     with at(HOUR):
-        assert store.sync([], forget_after=HOUR).missing == 1
+        assert sync(store, [], forget_after=HOUR).missing == 1
     with at(HOUR + 1):
-        assert store.sync([], forget_after=HOUR).gone == [old]
+        assert sync(store, [], forget_after=HOUR).gone == [old]
     with at(2 * HOUR):
-        result = store.sync([new], forget_after=HOUR)
+        result = sync(store, [new], forget_after=HOUR)
 
     assert result.back == 1
     [item] = result.pending
@@ -116,28 +116,28 @@ def test_listing_gone_for_longer_is_back_with_last_seen_and_old_price(
 
     # back info survives a failed notification until it was sent
     with at(2 * HOUR + 60):
-        [item] = store.sync([new], forget_after=HOUR).pending
+        [item] = sync(store, [new], forget_after=HOUR).pending
     assert item.back is not None
     store.mark_as_notified([item])
-    assert store.sync([new]).pending == []
+    assert sync(store, [new]).pending == []
 
 
 def test_back_without_price_change_has_no_previous_price(store: ListingStore) -> None:
     with at(0):
-        store.mark_as_notified(store.sync([make_listing(1)]).pending)
+        store.mark_as_notified(sync(store, [make_listing(1)]).pending)
     with at(10):
-        store.sync([])
+        sync(store, [])
     with at(20):
-        store.sync([], forget_after=5)
+        sync(store, [], forget_after=5)
     with at(30):
-        [item] = store.sync([make_listing(1)], forget_after=5).pending
+        [item] = sync(store, [make_listing(1)], forget_after=5).pending
     assert item.back is not None
     assert item.back.previous_price is None
 
 
 def test_title_change_is_recorded(store: ListingStore) -> None:
-    store.mark_as_notified(store.sync([make_listing(1)]).pending)
-    store.sync([make_listing(1, title="SALE")])
+    store.mark_as_notified(sync(store, [make_listing(1)]).pending)
+    sync(store, [make_listing(1, title="SALE")])
 
     [event] = [e for e in store.events(listing_id=1) if e.event == "title_changed"]
     assert event.details == {"old": "Item 1", "new": "SALE 1"}
@@ -146,15 +146,15 @@ def test_title_change_is_recorded(store: ListingStore) -> None:
 
 def test_incomplete_result_marks_nothing_missing(store: ListingStore) -> None:
     with at(0):
-        store.mark_as_notified(store.sync([make_listing(1), make_listing(2)]).pending)
+        store.mark_as_notified(sync(store, [make_listing(1), make_listing(2)]).pending)
     with at(10 * HOUR):
-        result = store.sync([make_listing(2)], complete=False, forget_after=HOUR)
+        result = sync(store, [make_listing(2)], complete=False, forget_after=HOUR)
     assert (result.missing, result.gone) == (0, [])
     assert events(store, 1) == [(1, "new"), (1, "notified")]
 
 
 def test_first_run_items_are_recorded(store: ListingStore) -> None:
-    store.mark_as_notified(store.sync([make_listing(1)]).pending, sent=False)
+    store.mark_as_notified(sync(store, [make_listing(1)]).pending, sent=False)
     store.mark_as_notified([make_listing(1)])  # already marked: no new event
     assert events(store) == [(1, "new"), (1, "recorded")]
 
@@ -168,7 +168,7 @@ def test_new_event_contains_etsy_timestamps(store: ListingStore) -> None:
             "price": Money(amount=100, divisor=100, currency_code="EUR"),
         }
     )
-    store.sync([item])
+    sync(store, [item])
     assert store.events()[0].details == {
         "price": "1.00 EUR",
         "created": 10,
@@ -180,9 +180,9 @@ def test_new_event_contains_etsy_timestamps(store: ListingStore) -> None:
 
 def test_events_filtered_by_time(store: ListingStore) -> None:
     with at(100):
-        store.sync([make_listing(1)])
+        sync(store, [make_listing(1)])
     with at(200):
-        store.sync([make_listing(2)])
+        sync(store, [make_listing(2)])
     assert events(store) == [(1, "new"), (2, "new")]
     assert ids(store.events(since=150)) == [2]
 
@@ -192,7 +192,7 @@ def test_polls_are_recorded_and_expire() -> None:
     with at(0):
         store.record_poll(error="boom")
     with at(HOUR):
-        result = store.sync([make_listing(1)])
+        result = sync(store, [make_listing(1)])
         store.record_poll(reported=2, received=1, complete=False, result=result)
     with at(2 * HOUR):
         assert store.incomplete_since() is not None
@@ -238,7 +238,7 @@ def test_migrates_a_database_from_version_1_0(tmp_path: Path) -> None:
     assert events(store) == [(1, "imported"), (2, "imported")]
     assert [e.time.timestamp() for e in store.events()] == [100, 200]
     with at(300):
-        assert ids(store.sync([make_listing(1), make_listing(2)]).pending) == [2]
+        assert ids(sync(store, [make_listing(1), make_listing(2)]).pending) == [2]
     store.close()
 
     # opening it again doesn't migrate twice
@@ -266,11 +266,11 @@ def test_new_database_needs_no_backup(tmp_path: Path) -> None:
 
 def test_filtered_listings_are_rechecked_while_in_the_shop(store: ListingStore) -> None:
     with at(0):
-        result = store.sync([make_listing(1), make_listing(2)])
+        result = sync(store, [make_listing(1), make_listing(2)])
         store.mark_as_filtered([(result.pending[0], "exclude keyword 'item'")])
         store.mark_as_notified(result.pending[1:])
     with at(10):
-        result = store.sync([make_listing(1), make_listing(2)])
+        result = sync(store, [make_listing(1), make_listing(2)])
     assert result.pending == []
     assert ids(result.refilter) == [1]
     [event] = [e for e in store.events(listing_id=1) if e.event == "filtered"]
@@ -281,29 +281,29 @@ def test_filtered_listings_are_rechecked_while_in_the_shop(store: ListingStore) 
     assert len(store.events(listing_id=1)) == 2
     store.mark_as_notified([make_listing(1)])
     with at(20):
-        assert store.sync([make_listing(1), make_listing(2)]).refilter == []
+        assert sync(store, [make_listing(1), make_listing(2)]).refilter == []
     assert [e.event for e in store.events(listing_id=1)] == ["new", "filtered", "notified"]
 
 
 def test_filtered_listings_not_in_the_shop_are_not_rechecked(store: ListingStore) -> None:
     with at(0):
-        result = store.sync([make_listing(1)])
+        result = sync(store, [make_listing(1)])
         store.mark_as_filtered([(item, "x") for item in result.pending])
     with at(10):
-        assert store.sync([]).refilter == []
+        assert sync(store, []).refilter == []
 
 
 def test_seen_since(store: ListingStore) -> None:
     with at(100):
-        store.sync([make_listing(1), make_listing(2)])
+        sync(store, [make_listing(1), make_listing(2)])
     with at(200):
-        store.sync([make_listing(3), make_listing(2)])
+        sync(store, [make_listing(3), make_listing(2)])
     assert ids(store.seen_since(150)) == [3, 2]
     assert ids(store.seen_since(0)) == [3, 2, 1]
 
 
 def test_polls_count_filtered_listings(store: ListingStore) -> None:
-    result = store.sync([make_listing(1)])
+    result = sync(store, [make_listing(1)])
     result.filtered = 1
     store.record_poll(reported=1, received=1, complete=True, result=result)
     assert store.polls()[0].filtered == 1
@@ -342,6 +342,6 @@ def test_migrates_a_database_from_version_1_1(tmp_path: Path) -> None:
     assert (tmp_path / "shop-notify.db.bak-v1").is_file()
     assert store.polls()[0].filtered == 0
     with at(200):
-        result = store.sync([make_listing(1)])
+        result = sync(store, [make_listing(1)])
     assert (result.pending, result.refilter) == ([], [])
     store.close()

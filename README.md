@@ -16,6 +16,7 @@ Shop Notify watches an Etsy shop and tells you – and anyone else you like – 
 
 - **New items and items back in the shop:** every listing is reported once; if it is gone for more than a day and comes back, you hear about it – with its previous price and when it was last seen.
 - **Any notification channel:** HTML e-mail with item images to as many recipients as you want, push to your phone via ntfy, Telegram, Signal and [100+ more](https://github.com/caronc/apprise/wiki) – also several at once.
+- **More than new items:** optionally back in stock, price drops and increases, sold out and almost sold out – see [events](https://github.com/spielkind/shop-notify/blob/main/docs/events.md).
 - **Only what you care about:** filters by keyword, regular expression or price – e.g. to skip reserved listings.
 - **Runs unattended:** made for a Raspberry Pi, as a Docker container or systemd service, with health check, watchdog and Etsy rate-limit handling.
 
@@ -85,7 +86,10 @@ All settings are read from `.env` in the working directory or from environment v
 | `ETSY_SHOP_ID` | – | Numeric shop ID, alternative to `ETSY_SHOP_NAME` |
 | `POLL_INTERVAL` | `300` | Seconds between two polls (minimum 10), see [below](#choosing-the-poll-interval) |
 | `FORGET_AFTER_HOURS` | `24` | An item counts as gone once it has been missing from the shop this long; if it comes back later, it is notified as back in the shop. Shorter gaps – Etsy's listing index is occasionally incomplete – don't cause a notification |
-| `NOTIFY_BACK` | `true` | Notify items that are back in the shop; with `false` they are only recorded in the history |
+| `NOTIFY_EVENTS` | `new,back` | What to notify about: `new`, `back`, `restocked`, `price_drop`, `price_rise`, `sold_out`, `low_stock` – see [events](https://github.com/spielkind/shop-notify/blob/main/docs/events.md) |
+| `NOTIFY_PRICE_CHANGE_PERCENT` | `5` | Minimum price change for `price_drop`/`price_rise` |
+| `NOTIFY_LOW_STOCK` | `1` | `low_stock` when only this many or fewer are left |
+| `NOTIFY_BACK` | `true` | Up to 1.2: `false` removes `back` from `NOTIFY_EVENTS` |
 | `POLL_HISTORY_DAYS` | `14` | Days the poll log is kept (`shop-notify history --polls`); the listing history is kept forever |
 | `NOTIFY_CONFIG` | – | Path to an Apprise YAML file with notification targets |
 | `NOTIFY_URLS` | – | One or more Apprise URLs, short form for simple setups |
@@ -185,6 +189,20 @@ shop-notify
 Update with `uv tool upgrade shop-notify`. To run it from a clone of the repository instead: `uv sync`, then `uv run shop-notify`.
 
 Stop it with `Ctrl+C`.
+
+### Events
+By default you are notified about new items and items back in the shop. More events can be switched on, e.g. sold-out items that are **back in stock** – right away, with how many are left:
+
+```sh
+NOTIFY_EVENTS=new,back,restocked
+```
+
+```text
+Back in stock in mabgraves: Last ONE Enchanted series mini print set
+$70.00 · sold out for 11 hours · only 1 left
+```
+
+**→ [Events in detail](https://github.com/spielkind/shop-notify/blob/main/docs/events.md):** back in stock, price drops and increases, sold out, almost sold out, and how Shop Notify finds out.
 
 ### History
 Shop Notify keeps a history of every listing – when it appeared, was notified, went missing, was gone or came back, and price and title changes – and a log of the polls of the last 14 days:
